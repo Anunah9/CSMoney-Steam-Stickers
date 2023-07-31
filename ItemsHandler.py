@@ -36,43 +36,6 @@ def get_price_sm(itemnameid_):
     return buy_price
 
 
-def get_item_float_and_stickers_bulk(inspect_links):
-    url = 'http://192.168.0.14/bulk'
-    params = {'links': [
-        {
-            'link': 'steam://rungame/730/76561202255233023/+csgo_econ_action_preview%20M4297045083788090304A31060219549D14620380817209653645'},
-        {
-            'link': 'steam://rungame/730/76561202255233023/+csgo_econ_action_preview%20M4303800483231470937A31087215833D2757410263309328335'},
-        {
-            'link': 'steam://rungame/730/76561202255233023/+csgo_econ_action_preview%20M4303800483231490077A31087343983D16438961679361356615'},
-        {
-            'link': 'steam://rungame/730/76561202255233023/+csgo_econ_action_preview%20M4303800483231491067A31087324654D2757410263309328335'},
-        {
-            'link': 'steam://rungame/730/76561202255233023/+csgo_econ_action_preview%20M4299296883602037588A30904023446D3236520255592927585'},
-        {
-            'link': 'steam://rungame/730/76561202255233023/+csgo_econ_action_preview%20M4315059482289697426A31087000725D16438961679361356615'},
-        {
-            'link': 'steam://rungame/730/76561202255233023/+csgo_econ_action_preview%20M4315059482289865876A31087388449D2757410263309328335'},
-        {
-            'link': 'steam://rungame/730/76561202255233023/+csgo_econ_action_preview%20M4295919183879364943A31087094760D16438961679361356615'},
-        {
-            'link': 'steam://rungame/730/76561202255233023/+csgo_econ_action_preview%20M4289163784434459467A31086886311D2757410263309328335'},
-        {
-            'link': 'steam://rungame/730/76561202255233023/+csgo_econ_action_preview%20M4289163784434459707A31086768593D2757410263309328335'}
-    ]}
-
-    # params = {
-    #     "links": inspect_links
-    # }
-    headers = {
-        'Content-Type': 'application/json'
-    }
-
-    response = requests.post(url, params=params, headers=headers)
-    if response.status_code != 200:
-        print('Get float and stickers:', response)
-
-
 def get_item_float_and_stickers(inspect_link):
     url = 'http://192.168.0.14/'
     params = {
@@ -115,20 +78,6 @@ def filter_stickers(items_from_csm, sticker_name):
     for item in items_from_csm:
         desired_sticker += get_desired_stickers_from_item(item, sticker_name)
     return desired_sticker
-
-
-# def get_overpay(items, sticker_name):
-#     ## Добравить инфу о самом предмете, скин и оружие
-#     sticker_name = 'Sticker | ' + sticker_name
-#     overpays = []
-#
-#         overpays += list(map(lambda sticker: {'overpay': 0 if sticker['overprice'] is None else
-#         Utils.change_currency(sticker['overprice']), 'position': sticker['position'], 'price': Utils.change_currency(sticker['price'])},
-#                              desired_sticker))
-#
-#     stickers_from_all_items = {'sticker_name': sticker_name, 'overpays': overpays}
-#     min_overpay, max_overpay = min_max_overpay(stickers_from_all_items)
-#     return min_overpay, max_overpay, stickers_from_all_items
 
 
 def min_max_overpay(sticker):
@@ -203,7 +152,6 @@ def find_strics(lst):
     filtered_elements = {name: info for name, info in element_count.items() if info['count'] >= 3}
 
     return filtered_elements
-
 
 
 def handle_listings(item_name, item_link, listings):
