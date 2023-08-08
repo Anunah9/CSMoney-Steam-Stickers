@@ -58,7 +58,7 @@ def get_item_float_and_stickers(inspect_link):
 
 
 def get_price_csm(market_hash_name):
-    return currency.change_currency(CSMoneyAPI.get_price(market_hash_name))
+    return csmoney_acc.get_price(market_hash_name)
 
 
 def get_desired_stickers_from_item(item, sticker_name):
@@ -90,7 +90,7 @@ def get_sticker_overpay(item_name, sticker_names, csm_price):
     print(sticker_names)
     handled_stickers = []
     for sticker in sticker_names:
-        items = CSMoneyAPI.get_sticker_overpay(item_name, sticker, csm_price=csm_price)
+        items = csmoney_acc.get_sticker_overpay(item_name, sticker, csm_price=csm_price)
         if 'error' in items:
             continue
         items = items['items']
@@ -264,11 +264,12 @@ if __name__ == '__main__':
     cs_db = sqlite3.connect('./db/CS.db')
     print(steamAcc.steamclient.is_session_alive())
 
-    currency = Utils.Currensy()
+    csmoney_acc = CSMoneyAPI.CSMMarketMethods()
 
-    min_limit_stickers_price = 400
-    min_limit_strick_price = 400
-    min_limit_profit = 20
+    min_limit_stickers_price = 200
+    min_limit_strick_price = 90
+    min_limit_profit = 10
+    currency = Utils.Currensy()
     have_strick = True
     while True:
         main()
