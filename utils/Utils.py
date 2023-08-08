@@ -11,9 +11,10 @@ def convert_name(market_hash_name):
     return urllib.parse.quote(market_hash_name)
 
 
-def change_currency(price):
+class Currensy:
     today = date.today()
-
     rates = ExchangeRates(str(today), locale_en=True)
-    usd = float(rates['USD'].value)
-    return price * usd
+
+    def change_currency(self, price):
+        usd = float(self.rates['USD'].value)
+        return price * usd

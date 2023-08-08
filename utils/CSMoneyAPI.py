@@ -55,7 +55,7 @@ def __get_def_price(item_id):
     if response.status_code != 200:
         print('Get skin info', response)
     default_price = response.json()['defaultPrice']
-    rub_price = round(utils.Utils.change_currency(default_price), 2)
+    rub_price = round(default_price, 2)
     return rub_price
 
 

@@ -58,7 +58,7 @@ def get_item_float_and_stickers(inspect_link):
 
 
 def get_price_csm(market_hash_name):
-    return CSMoneyAPI.get_price(market_hash_name)
+    return currency.change_currency(CSMoneyAPI.get_price(market_hash_name))
 
 
 def get_desired_stickers_from_item(item, sticker_name):
@@ -95,7 +95,7 @@ def get_sticker_overpay(item_name, sticker_names, csm_price):
             continue
         items = items['items']
         desired_stickers = filter_stickers(items, sticker)  # Инфа о скинах с этой наклейкой найденые на cs money
-        sticker_price = Utils.change_currency(desired_stickers[0]['price'])
+        sticker_price = currency.change_currency(desired_stickers[0]['price'])
         overpays = []
         for sticker_ in desired_stickers:
             if sticker_['overprice']:
@@ -107,8 +107,8 @@ def get_sticker_overpay(item_name, sticker_names, csm_price):
         overpay_min = min(overpays)
         overpay_max = max(overpays)
         sticker['price'] = round(sticker_price, 2)
-        sticker['min_overpay'] = round(Utils.change_currency(overpay_min))
-        sticker['max_overpay'] = round(Utils.change_currency(overpay_max))
+        sticker['min_overpay'] = round(currency.change_currency(overpay_min))
+        sticker['max_overpay'] = round(currency.change_currency(overpay_max))
         handled_stickers.append(sticker)
 
     return handled_stickers
@@ -156,7 +156,7 @@ def find_strics(lst):
 
 def handle_listings(item_name, item_link, listings):
     links = []
-    price_csm = get_price_csm(item_name)
+    price_csm = get_price_csm(item_name) * 0.95
     counter = 0
     if not price_csm:
         return False
@@ -264,9 +264,11 @@ if __name__ == '__main__':
     cs_db = sqlite3.connect('./db/CS.db')
     print(steamAcc.steamclient.is_session_alive())
 
-    min_limit_stickers_price = 200
-    min_limit_strick_price = 90
-    min_limit_profit = 10
+    currency = Utils.Currensy()
+
+    min_limit_stickers_price = 400
+    min_limit_strick_price = 400
+    min_limit_profit = 20
     have_strick = True
     while True:
         main()
