@@ -264,7 +264,7 @@ if __name__ == '__main__':
     cs_db = sqlite3.connect('./db/CS.db')
     print(steamAcc.steamclient.is_session_alive())
 
-    csmoney_acc = CSMoneyAPI.CSMMarketMethods()
+    csmoney_acc = CSMoneyAPI.CSMMarketMethods(None)
 
     min_limit_stickers_price = 200
     min_limit_strick_price = 90
