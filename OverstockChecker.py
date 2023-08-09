@@ -28,7 +28,10 @@ def main():
         for idx, item in enumerate(with_overstock):
             print(idx)
             item_name = item['fullName']
-            overstock = item['overstockDiff']
+            item_id = item['id']
+            item_info = csmoney_acc.get_inventory_item_info(item_id)
+            overstock = item_info['overstockDiff']
+
             message = f"🌟 **{item_name}** 🌟\n" \
                       f"Предметов до оверстока: {overstock}\n" \
                       # f"Ссылка: {item_link}\n"
@@ -37,7 +40,6 @@ def main():
                 bot.send_message(368333609, message)  # Я
                 with_overstock.pop(idx)
         time.sleep(10)
-
 
 
 if __name__ == '__main__':

@@ -16,6 +16,10 @@ import utils.Utils
 class CSMMarketMethods:
     cookies = None
     currency = utils.Utils.Currensy()
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) '
+                      'Chrome/114.0.0.0 YaBrowser/23.7.2.767 Yowser/2.5 Safari/537.36'
+    }
 
     def __init__(self, _cookies):
         self.cookies = _cookies
@@ -95,17 +99,13 @@ class CSMMarketMethods:
             'sort': 'price',
             'withStack': 'true'
         }
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) '
-                          'Chrome/114.0.0.0 YaBrowser/23.7.2.767 Yowser/2.5 Safari/537.36'
-        }
-        response = requests.get(url, params, cookies=self.cookies, headers=headers)
+
+        response = requests.get(url, params, cookies=self.cookies, headers=self.headers)
         if response.status_code != 200:
-            print(response)
+            print('Get inventory: ', response)
         return response.json()['items']
 
-    @staticmethod
-    def get_inventory_item_info(item_id):
+    def get_inventory_item_info(self, item_id):
         url = 'https://cs.money/skin_info?'
         params = {
             'appId': 730,
@@ -113,3 +113,7 @@ class CSMMarketMethods:
             'isBot': 'false',
             'botInventory': 'false'
         }
+        response = requests.get(url, params, headers=self.headers, cookies=self.cookies)
+        if response.status_code != 200:
+            print('Get inventory item info: ', response)
+        return response.json()
