@@ -116,4 +116,7 @@ class CSMMarketMethods:
         response = requests.get(url, params, headers=self.headers, cookies=self.cookies)
         if response.status_code != 200:
             print('Get inventory item info: ', response)
+        elif 'error' in response.json():
+            raise Exception(f"error: {response.json()['error']}")
+
         return response.json()

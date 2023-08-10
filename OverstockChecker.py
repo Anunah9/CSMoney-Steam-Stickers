@@ -23,7 +23,7 @@ def parse_cookie_string(cookie_string):
 
 def main():
     inventory = csmoney_acc.get_inventory()
-    with_overstock = list(filter(lambda x: int(x['overstockDiff']) < 1 and x['defaultPrice'] > 0.8, inventory))
+    with_overstock = list(filter(lambda x: int(x['overstockDiff']) < 1 and x['defaultPrice'] > 0.8 and 'isMarket' not in x, inventory))
     while with_overstock:
         for idx, item in enumerate(with_overstock):
             print(idx)
@@ -43,21 +43,7 @@ def main():
 
 
 if __name__ == '__main__':
-    raw_cookie = ('visitor_id=62c276de-e8e2-4453-b3be-fd65483b097c; registered_user=true; BD_TEST=a; '
-                  'onboarding__skin_quick_view=false; '
-                  'amp_9e76ea=-n0ZXiKdhVLOttObLYhLe3.NzY1NjExOTgxODc3OTc4MzE=..1gcf1dh09.1gcf1ei94.5.3.8; '
-                  'amp_c14fa5=3z98-G-lKgjQoBbxySvhao.NzY1NjExOTgxODc3OTc4MzE=..1gcf1dh0p.1gcf1ei95.3.3.6; '
-                  'region=Tatarstan Republic; auction__faq_banner=true; '
-                  'amp_d77dd0=fPIUdOWBOrsnPyEJjXy3vJ.NzY1NjExOTgxODc3OTc4MzE=..1h6mdhtao.1h6mdhtfi.12.g.1i; '
-                  'amp_d77dd0_cs.money=fPIUdOWBOrsnPyEJjXy3vJ.NzY1NjExOTgxODc3OTc4MzE=..1h6mdhthn.1h6mdists.1r.e.29; '
-                  'sc=868760AB-60B3-2DD8-21CD-43BFBF5E1EF9; __cflb=04dToSW2fHwgo6FnoYc76GfBcc8jrwsFhpSh978gep; '
-                  'isAnalyticEventsLimit=true; GleamId=nKZepcLuI9yXAxFeB; GleamA=%7B%22nKZep%22%3A%22login%22%7D; '
-                  'trade_carts_open=false; csgo_ses=c51de68c36a0003a660b6d337d15a22520ae01932c318e5fd64cd354161e70a5; '
-                  'steamid=76561198187797831; '
-                  'avatar=https://avatars.steamstatic.com/fb98e69b0df5bb36975d58c26bdc9a1c28f1560a_medium.jpg; '
-                  'username=Anunah; support_token=d69a586c92d46c64fa16765c614a24081bf7103e563b8816055e7821055d68ee; '
-                  'AB_TEST_CONCRETE_SKIN_1_ITERATION=a; AB_TEST_UXTR_981_CASHBACK=a; AB_TEST_UXTR_981_CASHBACK_V3=b; '
-                  'AB_TEST_UXTR_981_CASHBACK_V2=b; new_language=en')
+    raw_cookie = 'visitor_id=62c276de-e8e2-4453-b3be-fd65483b097c; registered_user=true; BD_TEST=a; onboarding__skin_quick_view=false; amp_9e76ea=-n0ZXiKdhVLOttObLYhLe3.NzY1NjExOTgxODc3OTc4MzE=..1gcf1dh09.1gcf1ei94.5.3.8; amp_c14fa5=3z98-G-lKgjQoBbxySvhao.NzY1NjExOTgxODc3OTc4MzE=..1gcf1dh0p.1gcf1ei95.3.3.6; region=Tatarstan Republic; auction__faq_banner=true; amp_d77dd0=fPIUdOWBOrsnPyEJjXy3vJ.NzY1NjExOTgxODc3OTc4MzE=..1h6mdhtao.1h6mdhtfi.12.g.1i; amp_d77dd0_cs.money=fPIUdOWBOrsnPyEJjXy3vJ.NzY1NjExOTgxODc3OTc4MzE=..1h6mdhthn.1h6mdists.1r.e.29; sc=868760AB-60B3-2DD8-21CD-43BFBF5E1EF9; csgo_ses=c51de68c36a0003a660b6d337d15a22520ae01932c318e5fd64cd354161e70a5; steamid=76561198187797831; avatar=https://avatars.steamstatic.com/fb98e69b0df5bb36975d58c26bdc9a1c28f1560a_medium.jpg; username=Anunah; support_token=d69a586c92d46c64fa16765c614a24081bf7103e563b8816055e7821055d68ee; AB_TEST_CONCRETE_SKIN_1_ITERATION=a; AB_TEST_UXTR_981_CASHBACK=a; AB_TEST_UXTR_981_CASHBACK_V3=b; AB_TEST_UXTR_981_CASHBACK_V2=b; __cflb=04dToSW2fHwgo6FnoYc76GfBcc8jrvrJBbhZexR4rp; trade_carts_open=false; new_language=en'
     cookies = parse_cookie_string(raw_cookie)
     bot = telebot.TeleBot('5096520863:AAHHvfFpQTH5fuXHjjAfzYklNGBPw4z57zA')
 
