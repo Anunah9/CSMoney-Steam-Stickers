@@ -24,6 +24,25 @@ class CSMMarketMethods:
     def __init__(self, _cookies):
         self.cookies = _cookies
 
+    @staticmethod
+    def get_items(min_price=0, max_price=1000, offset=0):
+        url = 'https://inventories.cs.money/5.0/load_bots_inventory/730'
+        params = {
+            'hasRareStickers': 'true',
+            'hasTradeLock': 'true',
+            'limit': 60,
+            'maxPrice': max_price,
+            'minPrice': min_price,
+            'offset': offset,
+            'order': 'asc',
+            'sort': 'price',
+            'withStack': 'true'
+        }
+        response = requests.get(url, params)
+        if response.status_code != 200:
+            print('Get items:', response)
+        return response.json()['items']
+
     def get_price(self, market_hash_name):
         url = 'https://inventories.cs.money/5.0/load_bots_inventory/730'
         params = {
