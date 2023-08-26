@@ -69,10 +69,11 @@ class CSMMarketMethods:
 
         item = item['items'][0]
         item_id = item['id']
-        default_price = self.__get_def_price(item_id)
-        return default_price
+        default_price = self.get_def_price(item_id)
+        rub_price = round(self.currency.change_currency(default_price), 2)
+        return rub_price
 
-    def __get_def_price(self, item_id):
+    def get_def_price(self, item_id):
         url = 'https://cs.money/skin_info'
         params = {
             'appId': 730,
@@ -84,8 +85,8 @@ class CSMMarketMethods:
         if response.status_code != 200:
             print('Get skin info', response)
         default_price = response.json()['defaultPrice']
-        rub_price = round(self.currency.change_currency(default_price), 2)
-        return rub_price
+
+        return default_price
 
     @staticmethod
     def get_sticker_overpay(market_hash_name, sticker, csm_price):

@@ -1,6 +1,11 @@
 import pprint
 import time
 from typing import Type
+from urllib.parse import quote
+
+import telebot
+import urllib3
+
 from utils.CSMoneyAPI import CSMMarketMethods
 import requests
 
@@ -20,16 +25,43 @@ class Sticker:
 
 class Item:
     def __init__(self, item):
+        self.appId = item.get("appId")
+        self.assetId = item.get("assetId")
+        self.collection = item.get("collection")
+        self.float = item.get("float")
+        self.fullName = item.get("fullName")
+        self.fullSlug = item.get("fullSlug")
+        self.hasHighDemand = item.get("hasHighDemand")
+        self.hasTradeLock = item.get("hasTradeLock")
+        self.id = item.get("id")
+        self.img = item.get("img")
+        self.inspect = item.get("inspect")
+        self.nameId = item.get("nameId")
+        self.overpay = item.get("overpay")
+        self.overprice = item.get("overprice")
+        self.pattern = item.get("pattern")
+        self.preview = item.get("preview")
+        self.price = item.get("price")
+        self.defaultPrice = None
+        self.priceWithBonus = item.get("priceWithBonus")
+        self.quality = item.get("quality")
+        self.rank = item.get("rank")
+        self.rarity = item.get("rarity")
+        self.screenshot = item.get("screenshot")
+        self.shortName = item.get("shortName")
+        self.steamId = item.get("steamId")
+        self.steamImg = item.get("steamImg")
+        self.stickers = item.get("stickers")
+        if self.hasTradeLock:
+            self.tradeLock = item.get("tradeLock")
+        self.type = item.get("type")
+        self.userId = item.get("userId")
+        self.wiki = item.get("wiki")
         self.item_name = item['fullName']
         self.overpay = item['overpay']
         self.csm_price = item['price']
         self.stickers = item['stickers']
         self.__convert_stickers()
-        if 'tradelock' in item:
-            self.tradelock = item['tradeLock']
-        else:
-            self.tradelock = 0
-        self.userid = item['userId']
 
     def __convert_stickers(self):
         stickers_result = []
@@ -57,55 +89,101 @@ class Item:
             return False
 
 
-def get_profit(item: Item):
-    print(item.item_name)
-    print( item.stickers)
-    print('get profit:', item.overpay)
-    print(item.csm_price)
-    print('Strick: False')
+class Profit:
+    def __init__(self):
+        self.overprice_from_me = None
+        self.result_price = None
+        self.profit = None
+
+    def get_profit_strick(self, item: Item):
+        self.overprice_from_me = float(item.stickers[0].price * 0.5 * len(item.stickers))
+        self.result_price = item.defaultPrice + self.overprice_from_me
+        self.profit = self.result_price / item.price - 1
+
+    def get_profit(self, item: Item):
+        pass
 
 
-def get_profit_strick(item: Item):
-
-    print(item.item_name)
-    print(item.stickers)
-    print(item.overpay)
-    print(item.csm_price)
-    print('Strick: True')
-
-
-def pred_filter(item: Item):
-    overpay = item.overpay['stickers']
-    price = item.csm_price
-    procent = round(overpay/price, 2)
-    print('overpay в pred filter:', overpay)
-    print('Наценка: ', procent)
-    if procent < 0.1 or procent > 0.3:
+def pred_filter(procent_, price_):
+    if procent_ < 0.1 or procent_ > 0.3:
         return False
-    elif price < 2.5:
+    elif price_ < 2.5:
         return False
     else:
         return True
 
 
+def create_url(item):
+    url = 'https://cs.money/csgo/trade/'
+    params = {
+        'search': quote(item.item_name),
+        'minPrice': item.price,
+        'maxPrice': item.price + 0.01,
+        'hasRareStickers': 'true',
+        'hasTradeLock': 'true'
+    }
+    query_string = '&'.join([f'{key}={value}' for key, value in params.items()])
+    full_url = f'{url}?{query_string}'
+    return full_url
+
+
+def item_handler(item: Item):
+    url = create_url(item)
+    profit_item = Profit()
+    overpay = item.overpay['stickers']
+    buy_price = item.csm_price
+    pred_procent_overpay = overpay / buy_price
+    if not pred_filter(pred_procent_overpay, buy_price):
+        print('Предмет не подходит')
+        return False
+
+    def_price = csmoney_acc.get_def_price(item.id)
+    real_procent_overpay = buy_price / def_price
+    item.defaultPrice = def_price
+    have_strick = item.check_strick()
+    print(item.preview)
+    if have_strick:
+        profit_item.get_profit_strick(item)
+        message = ''
+        message += '----------------------------------\n'
+        message += item.item_name + '\n'
+        message += f'Цена покупки: {buy_price}\n'
+        message += f'Стандартная цена без наценок: {def_price}\n'
+        message += f'Overpay от CSMoney за наклейки: {overpay}\n'
+        message += f'Наценка от CSMoney за наклейки: {pred_procent_overpay:.2%}\n'
+        message += f'Реальная переплата от CSMoney: {real_procent_overpay:.2%}\n'
+        message += f'Цена одного стикера: {item.stickers[0].price}\n'
+        message += f'Количество стикеров: {len(item.stickers)}\n'
+        message += f'Моя наценка: {profit_item.overprice_from_me:.2}\n'
+        message += f'Цена продажи: {profit_item.result_price:.2}\n'
+        message += f'Профит: {profit_item.profit:.2%}\n'
+        message += url
+        print(message)
+        print('Strick: ', have_strick)
+
+        if profit_item.profit > 0:
+            bot.send_photo(368333609, item.img, message)
+
+    else:
+        profit_item.get_profit(item)
+        print('Strick: ', have_strick)
+
+
 def main():
     for offset in range(0, 360, 60):
+        print(offset)
         items = get_items_from_csm(offset, min_price=2.5, max_price=20)
         for item in items:
-            print('----------------------------------')
             item_info = Item(item)
-            print(item_info.item_name)
-            if not pred_filter(item_info):
-                print('Предмет не подходит')
+            if not item_handler(item_info):
                 continue
-            have_strick = item_info.check_strick()
-            if have_strick:
-                profit = get_profit_strick(item_info)
-            else:
-                profit = get_profit(item_info)
+            time.sleep(1)
         time.sleep(2)
 
 
 if __name__ == '__main__':
+    bot = telebot.TeleBot('5096520863:AAHHvfFpQTH5fuXHjjAfzYklNGBPw4z57zA')
     csmoney_acc = CSMMarketMethods(None)
     main()
+
+
