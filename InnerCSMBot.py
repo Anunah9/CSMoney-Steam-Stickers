@@ -1,4 +1,5 @@
 import pprint
+import statistics
 import time
 from typing import Type
 from urllib.parse import quote
@@ -56,7 +57,6 @@ class Item:
             self.tradeLock = item.get("tradeLock")
         self.type = item.get("type")
         self.userId = item.get("userId")
-        self.wiki = item.get("wiki")
         self.item_name = item['fullName']
         self.overpay = item['overpay']
         self.csm_price = item['price']
@@ -94,6 +94,9 @@ class Profit:
         self.overprice_from_me = None
         self.result_price = None
         self.profit = None
+        self.real_procent_overpay = None
+        self.pred_procent_overpay = None
+        self.middle_price = None
 
     def get_profit_strick(self, item: Item):
         self.overprice_from_me = float(item.stickers[0].price * 0.5 * len(item.stickers))
@@ -103,14 +106,21 @@ class Profit:
     def get_profit(self, item: Item):
         pass
 
+    def pred_filter(self,   price_):
+        if self.pred_procent_overpay < 0.1 or self.pred_procent_overpay > 0.3:
+            return False
+        elif price_ < 2.5:
+            return False
+        elif self.real_procent_overpay > 0.7:
+            return False
+        else:
+            return True
 
-def pred_filter(procent_, price_):
-    if procent_ < 0.1 or procent_ > 0.3:
-        return False
-    elif price_ < 2.5:
-        return False
-    else:
-        return True
+    def post_filter(self):
+        if self.middle_price * 1.1 < self.result_price:
+            return False
+        else:
+            return True
 
 
 def create_url(item):
@@ -128,39 +138,52 @@ def create_url(item):
 
 
 def item_handler(item: Item):
+
     url = create_url(item)
     profit_item = Profit()
     overpay = item.overpay['stickers']
     buy_price = item.csm_price
-    pred_procent_overpay = overpay / buy_price
-    if not pred_filter(pred_procent_overpay, buy_price):
+    profit_item.pred_procent_overpay = overpay / buy_price
+
+    def_price = csmoney_acc.get_def_price(item.id)
+    profit_item.real_procent_overpay = buy_price / def_price - 1
+    price_history = csmoney_acc.get_price_history(item.nameId, 30)
+    price_history = list(map(lambda x: x['price'], price_history))
+    if not price_history:
+        return False
+    profit_item.middle_price = statistics.mean(price_history)
+    print(price_history)
+    print(profit_item.middle_price)
+    if not profit_item.pred_filter(buy_price):
         print('Предмет не подходит')
         return False
 
-    def_price = csmoney_acc.get_def_price(item.id)
-    real_procent_overpay = buy_price / def_price
     item.defaultPrice = def_price
     have_strick = item.check_strick()
     print(item.preview)
     if have_strick:
         profit_item.get_profit_strick(item)
+
         message = ''
         message += '----------------------------------\n'
         message += item.item_name + '\n'
         message += f'Цена покупки: {buy_price}\n'
         message += f'Стандартная цена без наценок: {def_price}\n'
         message += f'Overpay от CSMoney за наклейки: {overpay}\n'
-        message += f'Наценка от CSMoney за наклейки: {pred_procent_overpay:.2%}\n'
-        message += f'Реальная переплата от CSMoney: {real_procent_overpay:.2%}\n'
+        message += f'Наценка от CSMoney за наклейки: {profit_item.pred_procent_overpay:.2%}\n'
+        message += f'Реальная переплата от CSMoney: {profit_item.real_procent_overpay:.2%}\n'
         message += f'Цена одного стикера: {item.stickers[0].price}\n'
         message += f'Количество стикеров: {len(item.stickers)}\n'
         message += f'Моя наценка: {profit_item.overprice_from_me:.2}\n'
         message += f'Цена продажи: {profit_item.result_price:.2}\n'
+        message += f'Средняя цена продажи: {float(profit_item.middle_price):.2}\n'
         message += f'Профит: {profit_item.profit:.2%}\n'
         message += url
         print(message)
         print('Strick: ', have_strick)
-
+        if not profit_item.post_filter():
+            print('Предмет не подходит')
+            return False
         if profit_item.profit > 0:
             bot.send_photo(368333609, item.img, message)
 

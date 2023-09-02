@@ -1,3 +1,5 @@
+import datetime
+
 import requests
 
 import utils.Utils
@@ -73,7 +75,8 @@ class CSMMarketMethods:
         rub_price = round(self.currency.change_currency(default_price), 2)
         return rub_price
 
-    def get_def_price(self, item_id):
+    @staticmethod
+    def get_def_price(item_id):
         url = 'https://cs.money/skin_info'
         params = {
             'appId': 730,
@@ -87,6 +90,23 @@ class CSMMarketMethods:
         default_price = response.json()['defaultPrice']
 
         return default_price
+
+    @staticmethod
+    def get_price_history(item_id, days):
+        url = 'https://cs.money/market_sales'
+        today = datetime.datetime.today()
+        second_date = today - datetime.timedelta(days)
+        params = {
+            'appId': 730,
+            'nameId': item_id,
+            'startTime': second_date.timestamp()*1000,
+            'endTime': today.timestamp()*1000
+        }
+        response = requests.get(url, params)
+
+        if response.status_code != 200:
+            print('Get price history:', response.status_code)
+        return response.json()
 
     @staticmethod
     def get_sticker_overpay(market_hash_name, sticker, csm_price):

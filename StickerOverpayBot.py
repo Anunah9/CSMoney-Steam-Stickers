@@ -1,6 +1,8 @@
+import pprint
 import sqlite3
 import time
 import requests
+import steampy.models
 import telebot
 from utils import CSMoneyAPI, SteamMarketAPI, Utils
 
@@ -154,6 +156,11 @@ def find_strics(lst):
     return filtered_elements
 
 
+def buy_item(item_name, market_id, price, fee):
+    steamAcc.steamclient.market.buy_item(item_name, market_id, price, fee, game=steampy.models.GameOptions.CS,
+                                         currency=steampy.models.Currency.RUB)
+
+
 def handle_listings(item_name, item_link, listings):
     links = []
     price_csm = get_price_csm(item_name) * 0.95
@@ -170,7 +177,9 @@ def handle_listings(item_name, item_link, listings):
             add_to_checked(item_name, key)
             item = listings[key]
             try:
-                price_sm = (item['converted_price'] + item['converted_fee']) / 100
+                price_no_fee = item['converted_price']
+                fee = item['converted_fee']
+                price_sm = (price_no_fee + fee) / 100
                 inspect_link = item['asset']['market_actions'][0]['link'].replace('%listingid%', key).replace(
                     '%assetid%',
                     item['asset']['id'])
@@ -188,7 +197,6 @@ def handle_listings(item_name, item_link, listings):
                 continue
             stickers = get_sticker_overpay(item_name, stickers, price_csm)
             sum_prices_stickers = sum(list(map(lambda x: x['price'], stickers)))
-
             strick_stickers = find_strics(stickers)
             strick_sticker_name = ''
             strick_count = 0
@@ -230,12 +238,15 @@ def handle_listings(item_name, item_link, listings):
                        f"🚀 Профит min: {profit_min}%\n" \
 
             print(message)
-            if (profit_min >= min_limit_profit and sum_prices_stickers > min_limit_stickers_price) \
-                    or sum_price_strick > min_limit_strick_price:
+            if (profit_min >= min_limit_profit and sum_prices_stickers > price_sm * mult_for_common_item) \
+                    or sum_price_strick > price_sm * mult_for_strick:
+                listing_id = item['listingid']
                 bot.send_message(368333609, message)  # Я
+                if autobuy:
+                    buy_item(item_name, listing_id, price_no_fee + fee, fee)
 
     except AttributeError:
-        print(listings)
+        print('Ошибка atributeError, listings: ', listings)
 
 
 def main():
@@ -245,7 +256,10 @@ def main():
     print(items)
     t1 = time.time()
     for item in items[start::]:
-
+        balance = steamAcc.steamclient.get_wallet_balance()
+        print('Баланс кошелька: ', balance)
+        if balance < limit_balance:
+            return 'low balance'
         item_name, link, _, _, _ = item
         print('-------------------------------------------------------------')
         print(f"Предмет {counter} из {len(items)}")
@@ -266,14 +280,22 @@ if __name__ == '__main__':
 
     csmoney_acc = CSMoneyAPI.CSMMarketMethods(None)
 
-    min_limit_stickers_price = 400
-    min_limit_strick_price = 200
+    mult_for_strick = 2.5
+    mult_for_common_item = 10
+    # min_limit_stickers_price = 400
+    # min_limit_strick_price = 250
     min_limit_profit = 10
+    limit_balance = 6500
     currency = Utils.Currensy()
     have_strick = True
+
+    autobuy = True
+
     while True:
         try:
-            main()
+            if main() == 'low balance':
+                print('low balance')
+                break
         except Exception as exc:
             print(exc)
 

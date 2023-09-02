@@ -262,7 +262,3 @@ class SteamMarketMethods:
         response = self.steamclient._session.post(url, params, headers=self.headers)
         print(response.json())
 
-    def get_balance(self, cookie):
-        url = 'https://steamcommunity.com/market/'
-        response = self.steamclient._session.get(url, cookies=cookie)
-        print(response.json())
