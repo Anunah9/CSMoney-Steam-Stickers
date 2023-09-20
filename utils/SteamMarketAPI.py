@@ -6,10 +6,17 @@ import pprint
 import numpy as np
 from statistics import median
 import pickle
+
+import requests.exceptions
 import steampy.models
 from steampy.client import SteamClient
 from bs4 import BeautifulSoup
 from utils import Utils
+
+
+class TooManyRequestsException(Exception):
+    def __str__(self):
+        return f"Слишком много запросов."
 
 
 class SteamMarketMethods:
@@ -113,6 +120,7 @@ class SteamMarketMethods:
         response = self.steamclient._session.get(url, headers=self.headers)
         if response.status_code != 200:
             print('Get listing item', response)
+            return response.status_code
         soup = BeautifulSoup(response.content, 'lxml')
         info = soup.findAll('script', type="text/javascript")[-1]
         result_sting = info.text.split('g_rgListingInfo =')[1].split(';')[0]
