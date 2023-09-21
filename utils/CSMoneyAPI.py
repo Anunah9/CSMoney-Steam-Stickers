@@ -109,7 +109,7 @@ class CSMMarketMethods:
         return response.json()
 
     @staticmethod
-    def get_sticker_overpay(market_hash_name, sticker, csm_price):
+    def get_sticker_overpay(market_hash_name, sticker, csm_price=90000):
         url = 'https://inventories.cs.money/5.0/load_bots_inventory/730'
         slot = sticker['slot']
         sticker_name = sticker['name']
@@ -124,6 +124,7 @@ class CSMMarketMethods:
             'withStack': 'true'
         }
         response = requests.get(url, params=params)
+        print(response.url)
         if response.status_code != 200:
             print('Get sticker overpay', response)
         return response.json()
