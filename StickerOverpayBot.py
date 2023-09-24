@@ -1,3 +1,4 @@
+import asyncio
 import os
 import signal
 import sqlite3
@@ -25,6 +26,9 @@ from subprocess import call
         -Если переплата больше чем минимальный процент профита
         -Купить предмет"""
 
+if sys.platform:
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
 
 def get_items_from_db():
     cur = params.cs_db.cursor()
@@ -47,9 +51,6 @@ def get_item_listings(market_hash_name):
         params.bot.send_message(368333609, 'Перезагружаю роутер')  # Я
         params.reset_router.reset_router()
         restart_program()
-
-
-
     else:
         return listings
 
@@ -73,13 +74,24 @@ def get_item_float_and_stickers(inspect_link):
         response = requests.get(url, params=params_)
     if response.status_code != 200:
         print('Get float and stickers:', response)
-        params.get_float_error_counter += 1
+        for test in range(10):
+            response = requests.get(url, params=params_)
+            print('Test inspect сервера: ', test)
+            if response.status_code != 200:
+                params.get_float_error_counter += 1
+            time.sleep(0.5)
     elif response.status_code == 200:
         params.get_float_error_counter = 0
-    if params.get_float_error_counter > 10:
+    if params.get_float_error_counter > 7:
         close_server()
         start_cs_inspect_server()
         response = requests.get(url, params=params_)
+        if response.status_code != 200:
+            params.reset_router.reset_router()
+            restart_program()
+        params.get_float_error_counter = 0
+
+
 
 
     response = response.json()
@@ -110,6 +122,7 @@ def get_desired_stickers_from_item(item, sticker_name):
         if sticker['name'] == sticker_name:
             desired_stickers.append(sticker)
     return desired_stickers
+
 
 def min_max_overpay(sticker):
     min_overpay = min(sticker['overpays'], key=lambda x: x['overpay'])['overpay']
@@ -199,10 +212,8 @@ def item_handler(item_obj: Item, counter):
                 and strick_count >= min_stickers_in_strick):
 
         if autobuy:
-            try:
-                buy_item(item_obj.item_name, item_obj.listing_id, item_obj.price_no_fee + item_obj.fee, item_obj.fee)
-            except Exception as exc:
-                params.bot.send_message(368333609, str(exc))  # Я
+            buy_item(item_obj.item_name, item_obj.listing_id, item_obj.price_no_fee + item_obj.fee, item_obj.fee)
+
 
         # Улучшенный вариант сообщения
         message = f"🌟 **{item_obj.item_name}** 🌟\n" \
@@ -294,39 +305,6 @@ def update_csm_prices_in_db(item_name, price):
     params.cs_db.commit()
 
 
-def main():
-    start = 0
-    counter = start+1
-    items = get_items_from_db()
-
-    print(items)
-    t1 = time.time()
-
-    for item in items[start::]:
-        balance = params.steamAcc.steamclient.get_wallet_balance()
-        print('Баланс кошелька: ', balance)
-        if balance < limit_balance:
-            return 'low balance'
-        item_name, link, _, _, _ = item
-        if params.first_start:
-            price_csm = params.csm_acc.get_price(item_name)
-            print('Цена ксм: ', price_csm)
-            update_csm_prices_in_db(item_name, price_csm)
-
-        print('-------------------------------------------------------------')
-        print(f"Предмет {counter} из {len(items)}")
-        print(item_name)
-        counter += 1
-        listings = get_item_listings(item_name)
-
-        if listings == 429:
-            break
-        if not (items_iterator(item_name, link, listings)):
-            continue
-    params.first_start = False
-    print(time.time() - t1)
-
-
 def try_login():
     while True:
         try:
@@ -340,7 +318,10 @@ def try_login():
             params.bot.send_message(368333609, 'Ошибка Captcha required, перезагружаю роутер')  # Я
             params.reset_router.reset_router()
             restart_program()
-
+        except Exception as exc2:
+            params.bot.send_message(368333609, f'Ошибка try login: {exc2}')
+            params.reset_router.reset_router()
+            restart_program()
 
 
 class Params:
@@ -353,7 +334,6 @@ class Params:
     get_float_error_counter = 0
     stickers_prices = cs_db.cursor().execute('SELECT * FROM CSMoneyStickerPrices').fetchall()
     first_start = True
-
 
     def convert_stickers_to_dict(self):
         sticker_prices_dict = {}
@@ -372,7 +352,6 @@ class Params:
         time.sleep(10)
         close_server()
         start_cs_inspect_server()
-    # def test_services(self):
 
 
 def read_config(file_path):
@@ -413,12 +392,45 @@ def start_cs_inspect_server():
         print(f'Произошла ошибка при запуске сервера: {str(e)}')
 
 
+def main():
+    start = 0
+    counter = start + 1
+    items = get_items_from_db()
+    print(items)
+    t1 = time.time()
+    # balance = params.steamAcc.steamclient.get_wallet_balance()
+
+    for item in items[start::]:
+        item_name, link, _, _, _ = item
+        # print('Баланс кошелька: ', balance)
+        if balance < limit_balance:
+            return 'low balance'
+        if params.first_start:
+            price_csm = params.csm_acc.get_price(item_name)
+            print('Цена ксм: ', price_csm)
+            update_csm_prices_in_db(item_name, price_csm)
+        t3 = time.time()
+        listings = get_item_listings(item_name)
+        print('Get listings: ', time.time() - t3)
+        print(listings)
+        print('-------------------------------------------------------------')
+        print(f"Предмет {counter} из {len(items)}")
+        print(item_name)
+        counter += 1
+        if listings == 429:
+            break
+        if not (items_iterator(item_name, link, listings)):
+            continue
+    params.first_start = False
+    print(time.time() - t1)
+
+
 if __name__ == '__main__':
     API = '5096520863:AAHHvfFpQTH5fuXHjjAfzYklNGBPw4z57zA'
     params = Params()
     params.determination_of_initial_parameters()
     params.convert_stickers_to_dict()
-    print(params.stickers_prices)
+    # print(params.stickers_prices)
     config = read_config('./config.txt')
 
     mult_for_strick = int(config.get('MULT_FOR_STRICK'))
