@@ -8,9 +8,11 @@ import html2json
 import requests
 from bs4 import BeautifulSoup
 
+
 def add_to_db(sticker_name, price):
     query = f'INSERT INTO CSMoneyStickerPrices VALUES ("{sticker_name}", {price})'
     cur.execute(query)
+
 
 def get_all_sticker_prices():
     url = 'https://www.csgo.exchange/prices/'

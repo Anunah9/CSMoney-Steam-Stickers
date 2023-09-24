@@ -2,6 +2,7 @@ import ast
 import datetime
 import json
 import pprint
+import time
 
 import aiohttp
 import numpy as np
@@ -153,7 +154,6 @@ class SteamMarketMethods:
         listings = json.loads(result_sting)
         return listings
 
-
     async def get_item_listings_only_first_10_async(self, market_hash_name):
         url = 'https://steamcommunity.com/market/listings/730/' + Utils.convert_name(market_hash_name)
         async with aiohttp.ClientSession() as session:
@@ -167,7 +167,6 @@ class SteamMarketMethods:
                 result_string = info.text.split('g_rgListingInfo =')[1].split(';')[0]
                 listings = json.loads(result_string)
                 return listings
-
 
     def get_item_listings(self, market_hash_name):
         """Использует ссылку по которой очень быстро банит запросы"""
