@@ -9,6 +9,8 @@ import bs4
 import requests
 from steampy import models, exceptions
 import telebot
+
+import utils.CSMoneyAPI
 from utils import SteamMarketAPI, Utils, resetRouter
 from subprocess import call
 
@@ -286,6 +288,12 @@ def items_iterator(item_name, item_link, listings):
         print('Ошибка atributeError, listings: ', listings)
 
 
+def update_csm_prices_in_db(item_name, price):
+    query = f'UPDATE items_for_track SET price = {price} WHERE market_hash_name = "{item_name}"'
+    params.cs_db.cursor().execute(query)
+    params.cs_db.commit()
+
+
 def main():
     start = 0
     counter = start+1
@@ -293,12 +301,18 @@ def main():
 
     print(items)
     t1 = time.time()
+
     for item in items[start::]:
         balance = params.steamAcc.steamclient.get_wallet_balance()
         print('Баланс кошелька: ', balance)
         if balance < limit_balance:
             return 'low balance'
         item_name, link, _, _, _ = item
+        if params.first_start:
+            price_csm = params.csm_acc.get_price(item_name)
+            print('Цена ксм: ', price_csm)
+            update_csm_prices_in_db(item_name, price_csm)
+
         print('-------------------------------------------------------------')
         print(f"Предмет {counter} из {len(items)}")
         print(item_name)
@@ -309,6 +323,7 @@ def main():
             break
         if not (items_iterator(item_name, link, listings)):
             continue
+    params.first_start = False
     print(time.time() - t1)
 
 
@@ -324,19 +339,20 @@ def try_login():
         except exceptions.CaptchaRequired:
             params.bot.send_message(368333609, 'Ошибка Captcha required, перезагружаю роутер')  # Я
             params.reset_router.reset_router()
-            print('Ожидайте...')
-            time.sleep(120)
+            restart_program()
+
 
 
 class Params:
     bot: telebot.TeleBot = None
     cs_db = sqlite3.connect('./db/CS.db')
     steamAcc = None
-
+    csm_acc = utils.CSMoneyAPI.CSMMarketMethods(None)
     reset_router = resetRouter.ResetRouter()
     currency = Utils.Currensy()
     get_float_error_counter = 0
     stickers_prices = cs_db.cursor().execute('SELECT * FROM CSMoneyStickerPrices').fetchall()
+    first_start = True
 
 
     def convert_stickers_to_dict(self):
@@ -417,9 +433,12 @@ if __name__ == '__main__':
     min_limit_strick_price = int(config.get('MIN_LIMIT_PRICE_FOR_STRICK'))
     min_limit_profit = 10
     limit_balance = 0
-
+    try:
+        balance = params.steamAcc.steamclient.get_wallet_balance()
+    except AttributeError:
+        balance = 1000
     setting_message = f"**Текущие настройки бота** \n" \
-                      f"Текущий баланс💲: {params.steamAcc.steamclient.get_wallet_balance()} Руб\n" \
+                      f"Текущий баланс💲: {balance} Руб\n" \
                       f"Коэффициенты для стоимости стрика: {mult_for_strick}\n" \
                       f"Коэффициенты для стоимости без стрика: {mult_for_common_item}\n" \
                       f"Ограничение по балансу: {limit_balance} Руб\n" \
@@ -432,9 +451,20 @@ if __name__ == '__main__':
             if main() == 'low balance':
                 print('low balance')
                 break
+        except AttributeError:
+            params.bot.send_message(368333609, 'Ошибка Attribute error')  # Я
+            close_server()
+            params.bot.send_message(368333609, 'Перезагружаю роутер')  # Я
+            params.reset_router.reset_router()
+            restart_program()
+
         except Exception as exc:
             try:
-                params.bot.send_message(368333609, str(exc))  # Я
+                exc_type, exc_obj, exc_tb = sys.exc_info()
+                fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
+                print(exc_type, fname, exc_tb.tb_lineno)
+                params.bot.send_message(368333609, 'Ошибка в основном цикле: '+ f'{str(exc)}, {exc_type}, {fname}, {exc_tb.tb_lineno}')  # Я
             except Exception as exc1:
+
                 print(exc1)
             print(exc)

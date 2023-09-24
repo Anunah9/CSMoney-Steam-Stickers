@@ -3,6 +3,7 @@ import datetime
 import json
 import pprint
 
+import aiohttp
 import numpy as np
 from statistics import median
 import pickle
@@ -126,6 +127,20 @@ class SteamMarketMethods:
         result_sting = info.text.split('g_rgListingInfo =')[1].split(';')[0]
         listings = json.loads(result_sting)
         return listings
+
+    async def get_item_listings_only_first_10_async(self, market_hash_name):
+        url = 'https://steamcommunity.com/market/listings/730/' + Utils.convert_name(market_hash_name)
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=self.headers) as response:
+                if response.status != 200:
+                    print('Get listing item', response)
+                    return response.status
+                content = await response.text()
+                soup = BeautifulSoup(content, 'lxml')
+                info = soup.findAll('script', type="text/javascript")[-1]
+                result_string = info.text.split('g_rgListingInfo =')[1].split(';')[0]
+                listings = json.loads(result_string)
+                return listings
 
     def get_item_listings(self, market_hash_name):
         """Использует ссылку по которой очень быстро банит запросы"""
