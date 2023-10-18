@@ -1,3 +1,4 @@
+import asyncio
 import os
 import signal
 import sqlite3
@@ -25,6 +26,9 @@ from subprocess import call
         -Если переплата больше чем минимальный процент профита
         -Купить предмет"""
 
+if sys.platform:
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
 
 def get_items_from_db():
     cur = params.cs_db.cursor()
@@ -47,9 +51,6 @@ def get_item_listings(market_hash_name):
         params.bot.send_message(368333609, 'Перезагружаю роутер')  # Я
         params.reset_router.reset_router()
         restart_program()
-
-
-
     else:
         return listings
 
@@ -73,13 +74,24 @@ def get_item_float_and_stickers(inspect_link):
         response = requests.get(url, params=params_)
     if response.status_code != 200:
         print('Get float and stickers:', response)
-        params.get_float_error_counter += 1
+        for test in range(10):
+            response = requests.get(url, params=params_)
+            print('Test inspect сервера: ', test)
+            if response.status_code != 200:
+                params.get_float_error_counter += 1
+            time.sleep(0.5)
     elif response.status_code == 200:
         params.get_float_error_counter = 0
-    if params.get_float_error_counter > 10:
+    if params.get_float_error_counter > 7:
         close_server()
         start_cs_inspect_server()
         response = requests.get(url, params=params_)
+        if response.status_code != 200:
+            params.reset_router.reset_router()
+            restart_program()
+        params.get_float_error_counter = 0
+
+
 
 
     response = response.json()
@@ -110,6 +122,7 @@ def get_desired_stickers_from_item(item, sticker_name):
         if sticker['name'] == sticker_name:
             desired_stickers.append(sticker)
     return desired_stickers
+
 
 def min_max_overpay(sticker):
     min_overpay = min(sticker['overpays'], key=lambda x: x['overpay'])['overpay']
@@ -194,37 +207,37 @@ def item_handler(item_obj: Item, counter):
 
     print('---------------------------------------------------', strick_sticker_name)
     print(strick_stickers)
-    if (sum_prices_stickers > item_obj.price_sm * mult_for_common_item) \
-            or (sum_price_strick > item_obj.price_sm * mult_for_strick and sum_prices_stickers > min_limit_strick_price
-                and strick_count >= min_stickers_in_strick):
-
+    message = f"🌟 **{item_obj.item_name}** 🌟\n" \
+              f"Предмет #{counter}\n" \
+              f"Ссылка: {item_obj.item_link}\n" \
+              f"💲 Цена SM: {item_obj.price_sm} Руб\n" \
+              f"🔖 Стикеры:\n" \
+              f"💲 Общая стоимость стикеров: {round(sum_prices_stickers, 2)} Руб\n"
+    for sticker in stickers:
+        message += f"   • {sticker['name']} - 💲 Цена: {sticker['price']} Руб\n" \
+            # f"        📈 Переплата min: {sticker['min_overpay']} Руб\n" \
+        # f"        📈 Переплата max: {sticker['max_overpay']} Руб\n"
+    if strick_stickers:
+        message += f"🌟 **Стрики из стикеров** 🌟\n" \
+                   f"💲 Общая стоимость стрика: {round(sum_price_strick, 2)} Руб\n" \
+                   f"   • {strick_sticker_name} - 💲 Цена: {strick_price} Руб\n" \
+                   f"      Количество - {strick_count} \n"
+    print(message)
+    if sum_prices_stickers > item_obj.price_sm * mult_for_common_item:
         if autobuy:
-            try:
-                buy_item(item_obj.item_name, item_obj.listing_id, item_obj.price_no_fee + item_obj.fee, item_obj.fee)
-            except Exception as exc:
-                params.bot.send_message(368333609, str(exc))  # Я
-
-        # Улучшенный вариант сообщения
-        message = f"🌟 **{item_obj.item_name}** 🌟\n" \
-                  f"Предмет #{counter}\n" \
-                  f"Ссылка: {item_obj.item_link}\n" \
-                  f"💲 Цена SM: {item_obj.price_sm} Руб\n" \
-                  f"🔖 Стикеры:\n" \
-                  f"💲 Общая стоимость стикеров: {round(sum_prices_stickers, 2)} Руб\n"
-        for sticker in stickers:
-            message += f"   • {sticker['name']} - 💲 Цена: {sticker['price']} Руб\n" \
-                       # f"        📈 Переплата min: {sticker['min_overpay']} Руб\n" \
-                       # f"        📈 Переплата max: {sticker['max_overpay']} Руб\n"
-        if strick_stickers:
-            message += f"🌟 **Стрики из стикеров** 🌟\n" \
-                       f"💲 Общая стоимость стрика: {round(sum_price_strick, 2)} Руб\n" \
-                       f"   • {strick_sticker_name} - 💲 Цена: {strick_price} Руб\n" \
-                       f"      Количество - {strick_count} \n"
-        # message += f"📈 Переплата за все стикеры min: {round(min_overpay_all_stickers, 2)} Руб\n" \
-        #            f"📈 Переплата за все стикеры max: {round(max_overpay_all_stickers, 2)} Руб\n" \
-        #            f"🚀 Профит min: {profit_min}%\n"
-        print(message)
+            buy_item(item_obj.item_name, item_obj.listing_id, item_obj.price_no_fee + item_obj.fee, item_obj.fee)
         params.bot.send_message(368333609, message)  # Я
+    if strick_count == 3:
+        if sum_price_strick > item_obj.price_sm * mult_for_strick_3 and sum_prices_stickers > min_limit_strick_price:
+            if autobuy:
+                buy_item(item_obj.item_name, item_obj.listing_id, item_obj.price_no_fee + item_obj.fee, item_obj.fee)
+            params.bot.send_message(368333609, message)  # Я
+    elif strick_count == 4:
+        if sum_price_strick > item_obj.price_sm * mult_for_strick_4 and sum_prices_stickers > min_limit_strick_price:
+            if autobuy:
+                buy_item(item_obj.item_name, item_obj.listing_id, item_obj.price_no_fee + item_obj.fee, item_obj.fee)
+        # Улучшенный вариант сообщения
+            params.bot.send_message(368333609, message)  # Я
 
 
 def items_iterator(item_name, item_link, listings):
@@ -236,10 +249,10 @@ def items_iterator(item_name, item_link, listings):
     try:
         for key in listings.keys():
             counter += 1
-            print(f'listing №{counter}')
             if check_handled_items(key):
-                print(check_handled_items(key))
+                # print(check_handled_items(key))
                 continue
+            print(f'listing №{counter}')
             add_to_checked(item_name, key)
             item = listings[key]
             item_obj.listing_id = item['listingid']
@@ -294,39 +307,6 @@ def update_csm_prices_in_db(item_name, price):
     params.cs_db.commit()
 
 
-def main():
-    start = 0
-    counter = start+1
-    items = get_items_from_db()
-
-    print(items)
-    t1 = time.time()
-
-    for item in items[start::]:
-        balance = params.steamAcc.steamclient.get_wallet_balance()
-        print('Баланс кошелька: ', balance)
-        if balance < limit_balance:
-            return 'low balance'
-        item_name, link, _, _, _ = item
-        if params.first_start:
-            price_csm = params.csm_acc.get_price(item_name)
-            print('Цена ксм: ', price_csm)
-            update_csm_prices_in_db(item_name, price_csm)
-
-        print('-------------------------------------------------------------')
-        print(f"Предмет {counter} из {len(items)}")
-        print(item_name)
-        counter += 1
-        listings = get_item_listings(item_name)
-
-        if listings == 429:
-            break
-        if not (items_iterator(item_name, link, listings)):
-            continue
-    params.first_start = False
-    print(time.time() - t1)
-
-
 def try_login():
     while True:
         try:
@@ -340,7 +320,10 @@ def try_login():
             params.bot.send_message(368333609, 'Ошибка Captcha required, перезагружаю роутер')  # Я
             params.reset_router.reset_router()
             restart_program()
-
+        except Exception as exc2:
+            params.bot.send_message(368333609, f'Ошибка try login: {exc2}')
+            params.reset_router.reset_router()
+            restart_program()
 
 
 class Params:
@@ -353,7 +336,6 @@ class Params:
     get_float_error_counter = 0
     stickers_prices = cs_db.cursor().execute('SELECT * FROM CSMoneyStickerPrices').fetchall()
     first_start = True
-
 
     def convert_stickers_to_dict(self):
         sticker_prices_dict = {}
@@ -369,10 +351,8 @@ class Params:
                               f'Авторизация в стиме: {params.steamAcc.steamclient.is_session_alive()}')  # Я
         print(params.steamAcc.steamclient.is_session_alive())
         self.bot.send_message(368333609, 'Запуск inspect сервера')  # Я
-        time.sleep(10)
         close_server()
         start_cs_inspect_server()
-    # def test_services(self):
 
 
 def read_config(file_path):
@@ -413,17 +393,54 @@ def start_cs_inspect_server():
         print(f'Произошла ошибка при запуске сервера: {str(e)}')
 
 
+def main():
+    start = 0
+    counter = start + 1
+    items = get_items_from_db()
+    # print(items)
+    t1 = time.time()
+    # balance = params.steamAcc.steamclient.get_wallet_balance()
+
+    for item in items[start::]:
+        item_name, link, _, _, _ = item
+        # print('Баланс кошелька: ', balance)
+
+        if params.first_start:
+            price_csm = params.csm_acc.get_price(item_name)
+            print('Цена ксм: ', price_csm)
+            update_csm_prices_in_db(item_name, price_csm)
+        t3 = time.time()
+        try:
+            listings = get_item_listings(item_name)
+        except requests.exceptions.ReadTimeout:
+            print('TimeoutError')
+            continue
+        print('Get listings: ', time.time() - t3)
+        # print(listings)
+        print('-------------------------------------------------------------')
+        print(f"Предмет {counter} из {len(items)}")
+        print(item_name)
+        counter += 1
+        if listings == 429:
+            break
+        if not (items_iterator(item_name, link, listings)):
+            continue
+    params.first_start = False
+    print(time.time() - t1)
+
+
 if __name__ == '__main__':
     API = '5096520863:AAHHvfFpQTH5fuXHjjAfzYklNGBPw4z57zA'
     params = Params()
     params.determination_of_initial_parameters()
     params.convert_stickers_to_dict()
-    print(params.stickers_prices)
+    # print(params.stickers_prices)
     config = read_config('./config.txt')
 
-    mult_for_strick = int(config.get('MULT_FOR_STRICK'))
+    mult_for_strick_3 = float(config.get('MULT_FOR_STRICK_3'))
+    mult_for_strick_4 = float(config.get('MULT_FOR_STRICK_4'))
     min_stickers_in_strick = int(config.get('MIN_STICKERS_IN_STRICK'))
-    mult_for_common_item = int(config.get('MULT_FOR_COMMON_ITEM'))
+    mult_for_common_item = float(config.get('MULT_FOR_COMMON_ITEM'))
 
     test_params = False
     if test_params:
@@ -431,17 +448,10 @@ if __name__ == '__main__':
     else:
         autobuy = config.get('AUTOBUY')
     min_limit_strick_price = int(config.get('MIN_LIMIT_PRICE_FOR_STRICK'))
-    min_limit_profit = 10
-    limit_balance = 0
-    try:
-        balance = params.steamAcc.steamclient.get_wallet_balance()
-    except AttributeError:
-        balance = 1000
     setting_message = f"**Текущие настройки бота** \n" \
-                      f"Текущий баланс💲: {balance} Руб\n" \
-                      f"Коэффициенты для стоимости стрика: {mult_for_strick}\n" \
+                      f"Текущий баланс💲: {0} Руб\n" \
+                      f"Коэффициенты для стоимости стрика: {mult_for_strick_3}\n" \
                       f"Коэффициенты для стоимости без стрика: {mult_for_common_item}\n" \
-                      f"Ограничение по балансу: {limit_balance} Руб\n" \
                       f"Автопокупка: {autobuy}\n"
 
     params.bot.send_message(368333609, setting_message)  # Я

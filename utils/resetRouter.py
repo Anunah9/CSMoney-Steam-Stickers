@@ -25,9 +25,10 @@ class ResetRouter:
         time.sleep(5)
         self.driver.close()
         self.driver.quit()
-        for i in range(2):
-            print('Прошло: ', i, ' минут')
-            time.sleep(60)
+        print('Ожидание...')
+        for i in range(55):
+            time.sleep(1)
+            print(i)
 
 
 if __name__ == '__main__':

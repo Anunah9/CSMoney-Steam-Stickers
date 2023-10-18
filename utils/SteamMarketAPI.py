@@ -2,6 +2,7 @@ import ast
 import datetime
 import json
 import pprint
+import time
 
 import aiohttp
 import numpy as np
@@ -22,6 +23,7 @@ class TooManyRequestsException(Exception):
 
 class SteamMarketMethods:
     steamclient: steampy.client.SteamClient = None
+    async_session = None
     headers = {
         'Referer': 'https://steamcommunity.com/market/listings/730/',
         'User-Agent': 'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) '
@@ -123,6 +125,30 @@ class SteamMarketMethods:
             print('Get listing item', response)
             return response.status_code
         soup = BeautifulSoup(response.content, 'lxml')
+        info = soup.findAll('script', type="text/javascript")[-1]
+        result_sting = info.text.split('g_rgListingInfo =')[1].split(';')[0]
+        listings = json.loads(result_sting)
+        return listings
+
+    async def create_async_session(self):
+        headers = self.steamclient._session.headers  # Можете передать заголовки из вашей существующей сессии
+        cookie_jar = self.steamclient._session.cookies
+        sync_cookies = requests.utils.dict_from_cookiejar(cookie_jar)
+        self.async_session = aiohttp.ClientSession(headers=headers, cookies=sync_cookies)
+
+    async def async_get_item_listings_only_first_10(self, market_hash_name, link):
+        url = 'https://steamcommunity.com/market/listings/730/' + Utils.convert_name(market_hash_name)
+        response = await self.async_session.get(url)
+
+        if response.status != 200:
+            print('Get listing item', response)
+            return response.status
+        return (market_hash_name, link, response)
+
+    @staticmethod
+    async def get_listings_from_response( response: aiohttp.ClientResponse):
+        response_text = await response.text()
+        soup = BeautifulSoup(response_text, 'lxml')
         info = soup.findAll('script', type="text/javascript")[-1]
         result_sting = info.text.split('g_rgListingInfo =')[1].split(';')[0]
         listings = json.loads(result_sting)

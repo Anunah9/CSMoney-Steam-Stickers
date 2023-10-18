@@ -27,11 +27,11 @@ class CSMMarketMethods:
         self.cookies = _cookies
 
     @staticmethod
-    def get_items(min_price=0, max_price=1000, offset=0):
+    def get_items(min_price=0, max_price=1000, offset=0, has_rare_sticker=True, hasTradeLock=False):
         url = 'https://inventories.cs.money/5.0/load_bots_inventory/730'
         params = {
-            'hasRareStickers': 'true',
-            'hasTradeLock': 'true',
+            'hasRareStickers': has_rare_sticker,
+            'hasTradeLock': hasTradeLock,
             'limit': 60,
             'maxPrice': max_price,
             'minPrice': min_price,

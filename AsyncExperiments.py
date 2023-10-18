@@ -31,7 +31,8 @@ async def get_item_listigs_only_first_10(async_session: aiohttp.ClientSession,  
     return response
 
 
-async def get_listings(response: aiohttp.ClientResponse):
+async def get_listings_from_response(response: aiohttp.ClientResponse):
+
     response_text = await response.text()
     soup = BeautifulSoup(response_text, 'lxml')
     info = soup.findAll('script', type="text/javascript")[-1]
@@ -70,7 +71,9 @@ async def main():
     # Результаты будут в том же порядке, что и в списке urls
     for result in results:
         if result:
-            listings = await get_listings(result)
+
+            listings = await get_listings_from_response(result)
+
             print(listings)
 
     await session.close()
@@ -82,6 +85,10 @@ if __name__ == '__main__':
 
     for i in range(1):
         asyncio.run(main())
+
+
+    asyncio.run(main())
+
 
         # time.sleep(0.5)
     t2 = time.time() - t1
