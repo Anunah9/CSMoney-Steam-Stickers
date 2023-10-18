@@ -1,4 +1,5 @@
 import asyncio
+import codecs
 import json
 import os
 import random
@@ -37,25 +38,6 @@ def get_items_from_db():
     cur = params.cs_db.cursor()
     query = 'SELECT * FROM items_for_track'
     return cur.execute(query).fetchall()
-
-
-def get_item_listings(market_hash_name):
-    listings = params.steamAcc.get_item_listigs_only_first_10(market_hash_name)
-    # check_test = params.cs_db.cursor().execute('SELECT check_test FROM check_test').fetchone()[0]
-    # params.cs_db.cursor().execute('UPDATE check_test SET check_test=1')
-    # print('Проверка?: ', check_test)
-    # if check_test == 'true':
-    #     print('Проверка')
-    #     listings = 429
-
-    if listings == 429:
-        params.bot.send_message(368333609, 'Ошибка 429')  # Я
-        close_server()
-        params.bot.send_message(368333609, 'Перезагружаю роутер')  # Я
-        params.reset_router.reset_router()
-        restart_program()
-    else:
-        return listings
 
 
 def get_price_sm(itemnameid_):
@@ -226,7 +208,7 @@ def item_handler(item_obj: Item, counter):
         if autobuy:
             buy_item(item_obj.item_name, item_obj.listing_id, item_obj.price_no_fee + item_obj.fee, item_obj.fee)
         params.bot.send_message(368333609, message)  # Я
-    if strick_count == 3:
+    if strick_count == 3 and strick_count >= min_stickers_in_strick:
         if sum_price_strick > item_obj.price_sm * mult_for_strick_3 and sum_prices_stickers > min_limit_strick_price:
             if autobuy:
                 buy_item(item_obj.item_name, item_obj.listing_id, item_obj.price_no_fee + item_obj.fee, item_obj.fee)
@@ -338,6 +320,7 @@ class Params:
     first_start = True
     counter_requests = 0
     counter_for_too_many_request = 0
+
     def convert_stickers_to_dict(self):
         sticker_prices_dict = {}
         for sticker in self.stickers_prices:
@@ -353,8 +336,10 @@ class Params:
         print(params.steamAcc.steamclient.is_session_alive())
         self.bot.send_message(368333609, 'Запуск inspect сервера')  # Я
         # time.sleep(10)
-        close_server()
-        start_cs_inspect_server()
+        # close_server()
+        get_item_float_and_stickers('steam://rungame/730/76561202255233023/+csgo_econ_action_preview'
+                                    '%20S76561198163222057A29260535484D5072782033785464255')
+        # start_cs_inspect_server()
 
 
 def read_config(file_path):
@@ -381,7 +366,13 @@ def close_server():
     pid = get_pid_server()
     print(f'PID запущенного процесса: {pid}')
     print('Выключаю сервер...')
-    subprocess.run(['taskkill', '/F', '/T', '/PID', str(pid)], shell=True)
+    r = subprocess.run(['taskkill', '/F', '/T', '/PID', str(pid)], shell=True, stdout=subprocess.PIPE, text=True, encoding='cp866')
+    text = r.stdout
+    if text:
+        process_id = text.split('процесса ')[1].split(',')[0]
+        subprocess.run(['taskkill', '/F', '/T', '/PID', str(process_id)], shell=True, stdout=subprocess.PIPE, text=True,
+                       encoding='cp866')
+    print('Сообщение: ', r.stdout)
 
 
 def start_cs_inspect_server():
@@ -411,11 +402,12 @@ async def get_listings_from_response(response_text):
     return listings
 
 
-async def fetch_data(item, counter):
+async def fetch_data(item, counter, count_items):
     item_name = item[0]
     url = item[1]
-    delay = 1.05 * counter
+    delay = 1 * counter
     await asyncio.sleep(delay)
+    t1 = time.time()
     try:
         async with await create_async_session(steamclient=params.steamAcc.steamclient) as session:
             async with session.get(url) as response:
@@ -435,14 +427,23 @@ async def fetch_data(item, counter):
                     if response.status == 429:
 
                         if params.counter_for_too_many_request == 0:
+                            result_time = time.time() - params.t_before_429
                             params.bot.send_message(368333609, 'Ошибка 429')  # Я
                             params.bot.send_message(368333609,
-                                                    f'Бот проработал: {time.time() - params.t_before_429} секунд')  # Я
+                                                    f'Бот проработал: {result_time} секунд')  # Я
+
                             params.t_before_429 = time.time()
                             params.bot.send_message(368333609, f'Сделано запросов: {params.counter_requests}')  # Я
                             params.counter_requests = 0
-                        params.bot.send_message(368333609, f'Счетчик 429: {params.counter_for_too_many_request}')  # Я
+                            if result_time > 3500:
+                                close_server()
+                                params.bot.send_message(368333609, 'Перезагружаю роутер')  # Я
+                                params.reset_router.reset_router()
+                                restart_program()
+
                         if params.counter_for_too_many_request >= 40:
+                            params.bot.send_message(368333609,
+                                                    f'Счетчик 429: {params.counter_for_too_many_request}')  # Я
                             close_server()
                             params.bot.send_message(368333609, 'Перезагружаю роутер')  # Я
                             params.reset_router.reset_router()
@@ -455,12 +456,13 @@ async def fetch_data(item, counter):
 
     except asyncio.exceptions.TimeoutError:
         print('Timeout Error')
+    print(item_name)
+    print('Время выполнение запроса: ', time.time()-t1)
 
 
 async def main():
     await params.steamAcc.create_async_session()
     start = 0
-    counter = start + 1
     items = get_items_from_db()
     # print(items)
     t1 = time.time()
@@ -468,17 +470,18 @@ async def main():
     while True:
         try:
             print('---------------------------------------')
-            # tasks = [fetch_data(item) for item in items]
+
             tasks1 = []
             counter = 0
             iters = int(60/len(items))
             for i in range(iters):
                 for item in items:
-                    tasks1.append(fetch_data(item, counter))
+                    tasks1.append(fetch_data(item, counter, len(items)))
                     counter += 1
             t1 = time.time()
             await asyncio.gather(*tasks1)
             print('Время выполенения запросов: ', time.time() - t1)
+            print('Количество выполненных запросов: ', counter)
             await asyncio.sleep(1)  # Подождать 5 секунд перед следующим запросом
         except AttributeError:
             params.bot.send_message(368333609, 'Ошибка Attribute error')  # Я
