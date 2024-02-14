@@ -1,23 +1,21 @@
 import asyncio
-import codecs
 import json
 import os
-import random
-import signal
 import sqlite3
 import subprocess
 import sys
+import threading
 import time
-
 import aiohttp
 import bs4
 import requests
 from steampy import models, exceptions
 import telebot
-
+from multiprocessing import Process
+import Sticker_db_updater
 import utils.CSMoneyAPI
 from utils import SteamMarketAPI, Utils, resetRouter
-from subprocess import call
+
 
 """Модуль отслеживания предметов:
 -Взять предметы из бд
@@ -41,7 +39,7 @@ def get_items_from_db():
 
 
 def get_price_sm(itemnameid_):
-    buy_price, _, _, _ = params.steamAcc.get_steam_prices(itemnameid_)
+    buy_price, _, _, _ = params.steamAccMain.get_steam_prices(itemnameid_)
     return buy_price
 
 
@@ -54,7 +52,7 @@ def get_item_float_and_stickers(inspect_link):
     try:
         response = requests.get(url, params=params_)
     except requests.exceptions.ConnectionError:
-        close_server()
+        Utils.close_server()
         start_cs_inspect_server()
         response = requests.get(url, params=params_)
     if response.status_code != 200:
@@ -68,7 +66,7 @@ def get_item_float_and_stickers(inspect_link):
     elif response.status_code == 200:
         params.get_float_error_counter = 0
     if params.get_float_error_counter > 7:
-        close_server()
+        Utils.close_server()
         start_cs_inspect_server()
         response = requests.get(url, params=params_)
         if response.status_code != 200:
@@ -122,7 +120,7 @@ def get_sticker_price(sticker_names):
 
 def get_sticker_prices(sticker):
     sticker_name = sticker['name']
-    price = params.stickers_prices[sticker_name.lower()]
+    price = params.stickers_prices[sticker_name]
     return price
 
 
@@ -157,8 +155,8 @@ def find_strics(lst):
 
 
 def buy_item(item_name, market_id, price, fee):
-    params.steamAcc.steamclient.market.buy_item(item_name, market_id, price, fee, game=models.GameOptions.CS,
-                                                currency=models.Currency.RUB)
+    params.steamAccMain.steamclient.market.buy_item(item_name, market_id, price, fee, game=models.GameOptions.CS,
+                                                    currency=models.Currency.RUB)
 
 
 class Item:
@@ -288,57 +286,66 @@ def update_csm_prices_in_db(item_name, price):
     params.cs_db.commit()
 
 
-def try_login():
+def try_login(login, password, path_mafile):
     while True:
         try:
-            steamAcc = SteamMarketAPI.SteamMarketMethods()
-            params.bot.send_message(368333609, 'Создание экземпляра steamAcc успешно')  # Я
+            steamAcc = SteamMarketAPI.SteamMarketMethods(login, password, path_mafile)
+            params.bot_error_logger.send_message(368333609, f'Создание экземпляра steamAcc {login} успешно')  # Я
             return steamAcc
         except ConnectionError:
-            params.bot.send_message(368333609, 'Ошибка Connection error, пробую снова')  # Я
+            params.bot_error_logger.send_message(368333609, 'Ошибка Connection error, пробую снова')  # Я
             time.sleep(5)
         except exceptions.CaptchaRequired:
-            params.bot.send_message(368333609, 'Ошибка Captcha required, перезагружаю роутер')  # Я
+            params.bot_error_logger.send_message(368333609, 'Ошибка Captcha required, перезагружаю роутер')  # Я
             params.reset_router.reset_router()
             restart_program()
         except Exception as exc2:
-            params.bot.send_message(368333609, f'Ошибка try login: {exc2}')
-            params.reset_router.reset_router()
-            restart_program()
+            params.bot_error_logger.send_message(368333609, f'Ошибка try login: {exc2}')
+            # params.reset_router.reset_router()
+            # restart_program()
 
 
 class Params:
     bot: telebot.TeleBot = None
     cs_db = sqlite3.connect('./db/CS.db')
     t_before_429 = None
-    steamAcc = None
+    steamAccMain = None
+    steamAccServer = None
     csm_acc = utils.CSMoneyAPI.CSMMarketMethods(None)
     reset_router = resetRouter.ResetRouter()
-    currency = Utils.Currensy()
+    currency = Utils.Currensy('RUB')
     get_float_error_counter = 0
     stickers_prices = cs_db.cursor().execute('SELECT * FROM CSMoneyStickerPrices').fetchall()
     first_start = True
     counter_requests = 0
     counter_for_too_many_request = 0
 
+    def update_stickers_prices(self):
+        Sticker_db_updater.main()
+
     def convert_stickers_to_dict(self):
         sticker_prices_dict = {}
         for sticker in self.stickers_prices:
-            sticker_prices_dict[sticker[0]] = sticker[1]
+            sticker_prices_dict[sticker[0]] = self.currency.change_currency(sticker[1])
         self.stickers_prices = sticker_prices_dict
 
     def determination_of_initial_parameters(self):
         self.bot = telebot.TeleBot(API)
-        self.bot.send_message(368333609, 'Запуск бота')  # Я
-        self.steamAcc = try_login()
-        self.bot.send_message(368333609,
-                              f'Авторизация в стиме: {params.steamAcc.steamclient.is_session_alive()}')  # Я
-        print(params.steamAcc.steamclient.is_session_alive())
-        self.bot.send_message(368333609, 'Запуск inspect сервера')  # Я
+        self.bot_error_logger = telebot.TeleBot(API_ErrorLogger)
+        self.bot_error_logger.send_message(368333609, 'Запуск бота')  # Я
+        self.steamAccMain = try_login('Sanek0904', 'Bazaranet101', 'Sanek0904.txt')
+        # self.steamAccServer = try_login('abinunas1976', 'PQIUZmqgCW1992', './ServerAcc.txt')
+        self.bot_error_logger.send_message(368333609,
+                              f'Авторизация в стиме: {params.steamAccMain.steamclient.is_session_alive()}')  # Я
+        print(params.steamAccMain.steamclient.is_session_alive())
+        self.bot_error_logger.send_message(368333609, 'Запуск inspect сервера')  # Я
         # time.sleep(10)
         # close_server()
         get_item_float_and_stickers('steam://rungame/730/76561202255233023/+csgo_econ_action_preview'
                                     '%20S76561198163222057A29260535484D5072782033785464255')
+        self.bot_error_logger.send_message(368333609, 'Обновление цен на стикеры')
+        self.update_stickers_prices()
+        self.bot_error_logger.send_message(368333609, 'Готово')
         # start_cs_inspect_server()
 
 
@@ -356,25 +363,6 @@ def restart_program():
     os.execl(python, python, *sys.argv)
 
 
-def get_pid_server():
-    with open(r'C:\Users\Sasha\Desktop\CSGOFloatInspect\node_pid.txt') as f:
-        pid = f.read()
-        return pid
-
-
-def close_server():
-    pid = get_pid_server()
-    print(f'PID запущенного процесса: {pid}')
-    print('Выключаю сервер...')
-    r = subprocess.run(['taskkill', '/F', '/T', '/PID', str(pid)], shell=True, stdout=subprocess.PIPE, text=True, encoding='cp866')
-    text = r.stdout
-    if text:
-        process_id = text.split('процесса ')[1].split(',')[0]
-        subprocess.run(['taskkill', '/F', '/T', '/PID', str(process_id)], shell=True, stdout=subprocess.PIPE, text=True,
-                       encoding='cp866')
-    print('Сообщение: ', r.stdout)
-
-
 def start_cs_inspect_server():
     server_path = r'C:\Users\Sasha\Desktop\CSGOFloatInspect'
     indexjs_path = os.path.join(server_path, 'index.js')
@@ -388,9 +376,12 @@ def start_cs_inspect_server():
 
 async def create_async_session(steamclient):
     headers = steamclient._session.headers  # Можете передать заголовки из вашей существующей сессии
+    # print(steamclient._session.cookies)
     cookie_jar = steamclient._session.cookies
+
     sync_cookies = requests.utils.dict_from_cookiejar(cookie_jar)
-    async_session = aiohttp.ClientSession(headers=headers, cookies=sync_cookies)
+    print('ccccccccccc', cookie_jar.get_dict("steamcommunity.com"))
+    async_session = aiohttp.ClientSession(headers=headers, cookies=cookie_jar.get_dict("steamcommunity.com"))
     return async_session
 
 
@@ -402,91 +393,98 @@ async def get_listings_from_response(response_text):
     return listings
 
 
-async def fetch_data(item, counter, count_items):
+async def fetch_data(session, item, counter, count_items):
     item_name = item[0]
     url = item[1]
-    delay = 1 * counter
+    delay = 0.85 * counter
     await asyncio.sleep(delay)
-    t1 = time.time()
     try:
-        async with await create_async_session(steamclient=params.steamAcc.steamclient) as session:
-            async with session.get(url) as response:
-                params.counter_requests += 1
-                session.headers['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, '\
-                                                'like Gecko) Chrome/106.0.0.0 YaBrowser/22.11.2.807 Yowser/2.5 ' \
-                                                'Safari/537.36'
-                session.headers['Referer'] = params.steamAcc.headers['Referer']
-                if response.status == 200:
-                    params.counter_for_too_many_request = 0
-                    data = await response.text()
-                    listings = await get_listings_from_response(data)
-                    items_iterator(item_name, url, listings)
-                    # print(f'Successful response from {url}: {respo}')
-                else:
-                    print(f'Error response from {url}: {response.status}')
-                    if response.status == 429:
 
-                        if params.counter_for_too_many_request == 0:
-                            result_time = time.time() - params.t_before_429
-                            params.bot.send_message(368333609, 'Ошибка 429')  # Я
-                            params.bot.send_message(368333609,
-                                                    f'Бот проработал: {result_time} секунд')  # Я
+        session.headers['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, ' \
+                                        'like Gecko) Chrome/106.0.0.0 YaBrowser/22.11.2.807 Yowser/2.5 ' \
+                                        'Safari/537.36'
+        session.headers['Referer'] = params.steamAccMain.headers['Referer']
+        t1 = time.time()
+        response = await session.get(url)
+        # async with session.get(url) as response:
+        print('Время одного запроса: ', time.time()-t1)
+        params.counter_requests += 1
+        if response.status == 200:
+            params.counter_for_too_many_request = 0
+            data = await response.text()
+            listings = await get_listings_from_response(data)
+            items_iterator(item_name, url, listings)
+            # print(f'Successful response from {url}: {respo}')
+        else:
+            print(f'Error response from {url}: {response.status}')
+            if response.status == 429:
 
-                            params.t_before_429 = time.time()
-                            params.bot.send_message(368333609, f'Сделано запросов: {params.counter_requests}')  # Я
-                            params.counter_requests = 0
-                            if result_time > 3500:
-                                close_server()
-                                params.bot.send_message(368333609, 'Перезагружаю роутер')  # Я
-                                params.reset_router.reset_router()
-                                restart_program()
+                if params.counter_for_too_many_request == 0:
+                    result_time = time.time() - params.t_before_429
+                    params.bot_error_logger.send_message(368333609, 'Ошибка 429')  # Я
+                    params.bot_error_logger.send_message(368333609,
+                                            f'Бот проработал: {result_time} секунд')  # Я
 
-                        if params.counter_for_too_many_request >= 40:
-                            params.bot.send_message(368333609,
-                                                    f'Счетчик 429: {params.counter_for_too_many_request}')  # Я
-                            close_server()
-                            params.bot.send_message(368333609, 'Перезагружаю роутер')  # Я
-                            params.reset_router.reset_router()
-                            restart_program()
+                    params.t_before_429 = time.time()
+                    params.bot_error_logger.send_message(368333609, f'Сделано запросов: {params.counter_requests}')  # Я
+                    params.counter_requests = 0
+                    if result_time > 3500:
+                        Utils.close_server()
+                        params.bot_error_logger.send_message(368333609, 'Перезагружаю роутер')  # Я
+                        params.reset_router.reset_router()
+                        restart_program()
 
-                        params.counter_for_too_many_request += 1
-                    await asyncio.sleep(10)
+                if params.counter_for_too_many_request >= 40:
+                    params.bot_error_logger.send_message(368333609,
+                                            f'Счетчик 429: {params.counter_for_too_many_request}')  # Я
+                    Utils.close_server()
+                    params.bot_error_logger.send_message(368333609, 'Перезагружаю роутер')  # Я
+                    params.reset_router.reset_router()
+                    restart_program()
+
+                params.counter_for_too_many_request += 1
+            await asyncio.sleep(10)
     except aiohttp.ClientError as e:
         print(f'Error during request to {url}: {e}')
 
     except asyncio.exceptions.TimeoutError:
         print('Timeout Error')
-    print(item_name)
-    print('Время выполнение запроса: ', time.time()-t1)
 
 
 async def main():
-    await params.steamAcc.create_async_session()
+    session = await create_async_session(steamclient=params.steamAccMain.steamclient)
     start = 0
-    items = get_items_from_db()
-    # print(items)
-    t1 = time.time()
-    # balance = params.steamAcc.steamclient.get_wallet_balance()
     while True:
+        items = get_items_from_db()
+        print('Количество предметов: ', len(items))
+        for item in items:
+            print(item[0])
         try:
             print('---------------------------------------')
 
             tasks1 = []
             counter = 0
-            iters = int(60/len(items))
-            for i in range(iters):
+            iter_time = round(60/len(items))
+            print('Кол-во секунд на полную итерацию', iter_time)
+
+            for i in range(iter_time):
                 for item in items:
-                    tasks1.append(fetch_data(item, counter, len(items)))
+                    tasks1.append(fetch_data(session, item, counter, len(items)))
                     counter += 1
-            t1 = time.time()
+            t2 = time.time()
             await asyncio.gather(*tasks1)
-            print('Время выполенения запросов: ', time.time() - t1)
+            result_time = time.time() - t2
+            target_delay = 60 - result_time
+            print('Время выполенения запросов: ', result_time)
+            print('Задержка до нужного времени: ', target_delay)
             print('Количество выполненных запросов: ', counter)
-            await asyncio.sleep(1)  # Подождать 5 секунд перед следующим запросом
+            t3 = time.time()
+            await asyncio.sleep(target_delay if target_delay > 0 else 0)
+            print('Проверка задержки: ', time.time()-t3)
         except AttributeError:
-            params.bot.send_message(368333609, 'Ошибка Attribute error')  # Я
-            close_server()
-            params.bot.send_message(368333609, 'Перезагружаю роутер')  # Я
+            params.bot_error_logger.send_message(368333609, 'Ошибка Attribute error')  # Я
+            Utils.close_server()
+            params.bot_error_logger.send_message(368333609, 'Перезагружаю роутер')  # Я
             params.reset_router.reset_router()
             restart_program()
 
@@ -495,15 +493,31 @@ async def main():
                 exc_type, exc_obj, exc_tb = sys.exc_info()
                 fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
                 print(exc_type, fname, exc_tb.tb_lineno)
-                params.bot.send_message(368333609,
+                params.bot_error_logger.send_message(368333609,
                                         'Ошибка в основном цикле: ' + f'{str(exc)}, {exc_type}, {fname}, {exc_tb.tb_lineno}')  # Я
             except Exception as exc1:
                 print(exc1)
             print(exc)
 
 
+def print_hel(args):
+    pid = os.getpid()
+    cs_db = sqlite3.connect('./db/CS.db')
+    cur = cs_db.cursor()
+    while True:
+        time_now = time.time()
+        query = f'UPDATE check_test SET working_time_check={int(time_now)}, pid_bot={pid}'
+        cur.execute(query)
+        cs_db.commit()
+        print(query)
+        time.sleep(5)
+
+
 if __name__ == '__main__':
+    t1 = threading.Thread(target=print_hel, args=('bob',), daemon=True)
+    t1.start()
     API = '5096520863:AAHHvfFpQTH5fuXHjjAfzYklNGBPw4z57zA'
+    API_ErrorLogger = '6713247775:AAEq_pT350E8rUuyaz8eSWvyMYawK1Iqz9c'
     params = Params()
     params.determination_of_initial_parameters()
     params.convert_stickers_to_dict()
@@ -514,6 +528,7 @@ if __name__ == '__main__':
     mult_for_strick_4 = float(config.get('MULT_FOR_STRICK_4'))
     min_stickers_in_strick = int(config.get('MIN_STICKERS_IN_STRICK'))
     mult_for_common_item = float(config.get('MULT_FOR_COMMON_ITEM'))
+
 
     test_params = False
     if test_params:
@@ -527,7 +542,7 @@ if __name__ == '__main__':
                       f"Коэффициенты для стоимости без стрика: {mult_for_common_item}\n" \
                       f"Автопокупка: {autobuy}\n"
 
-    params.bot.send_message(368333609, setting_message)  # Я
+    params.bot_error_logger.send_message(368333609, setting_message)  # Я
     params.t_before_429 = time.time()
 
     loop = asyncio.get_event_loop()

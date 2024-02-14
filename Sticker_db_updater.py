@@ -9,12 +9,12 @@ import requests
 from bs4 import BeautifulSoup
 
 
-def add_to_db(sticker_name, price):
+def add_to_db(sticker_name, price, cur):
     query = f'INSERT INTO CSMoneyStickerPrices VALUES ("{sticker_name}", {price})'
     cur.execute(query)
 
 
-def get_all_sticker_prices():
+def get_all_sticker_prices(cur):
     url = 'https://www.csgo.exchange/prices/'
     response = requests.get(url)
     soup = BeautifulSoup(response.content, 'lxml')
@@ -23,21 +23,39 @@ def get_all_sticker_prices():
     print(len(stickers))
     for sticker in stickers:
         sticker_name = unquote(sticker['data-name'])
-        price = round(curresncy.change_currency(float(sticker['data-vn'])), 2)
-        add_to_db(sticker_name, price)
+        price = float(sticker['data-vn'])
+        add_to_db(sticker_name, price, cur)
         # print(sticker_name)
         # print(price)
-    
+
+
+def get_all_sticker_prices_v2(cur):
+    url = 'http://csgobackpack.net/api/GetItemsList/v2/'
+    response = requests.get(url).json()
+    items = response["items_list"]
+    stickers = list(filter(lambda x: "Sticker |" in x, items.keys()))
+
+    for sticker in stickers:
+        item = items[sticker]
+        print(sticker)
+        # pprint.pprint(item)
+        try:
+            median_price = item['price']['7_days']['median']
+        except:
+            median_price = item['price']['all_time']['median']
+        add_to_db(sticker, median_price, cur)
 
 def main():
+    db = sqlite3.connect('db/CS.db')
+    cur = db.cursor()
     print('11')
-    get_all_sticker_prices()
+    get_all_sticker_prices_v2(cur)
+    db.commit()
+    db.close()
+    print('Цены обновлены.')
 
 
 if __name__ == '__main__':
-    db = sqlite3.connect('db/CS.db')
-    cur = db.cursor()
-    curresncy = utils.Utils.Currensy()
+
     main()
-    db.commit()
-    db.close()
+

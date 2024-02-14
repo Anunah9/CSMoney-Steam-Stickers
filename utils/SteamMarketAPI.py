@@ -30,24 +30,34 @@ class SteamMarketMethods:
                       'Chrome/106.0.0.0 YaBrowser/22.11.2.807 Yowser/2.5 Safari/537.36 '
     }
 
-    def __init__(self):
+    def __init__(self, login, password, path_mafile):
+        print('load')
+
+        self.login = login
+        self.password = password
+        self.path_mafile = path_mafile
+        # self.write_login()
         self.load_login()
         if not self.steamclient.is_session_alive():
+            print('write')
             self.write_login()
+            if not self.steamclient.is_session_alive():
+                print('Не получилось ')
 
     def login_required(self):
         check = self.steamclient.is_session_alive()
         print('Is session alive: ', check)
 
     def load_login(self):
-        with open('logon.bin', 'rb') as f:
+        with open(f'{self.login}.bin', 'rb') as f:
             self.steamclient = pickle.load(f)
 
     def write_login(self):
         self.steamclient = SteamClient('97F914FB6333AC5416AF882DA9909A35')
-        self.steamclient.login('sanek0904', 'Bazaranet101', './Anunah.txt')
+        self.steamclient.login(self.login, self.password, self.path_mafile)
         print(self.steamclient)
-        with open('logon.bin', 'wb') as f:
+        print(self.steamclient._session.cookies.get_dict("steamcommunity.com"))
+        with open(f'{self.login}.bin', 'wb') as f:
             pickle.dump(self.steamclient, f)
 
     def get_steam_prices(self, item_name_id):
@@ -107,18 +117,21 @@ class SteamMarketMethods:
 
         response = self.steamclient._session.get(url, params=params, headers=self.headers)
         print(response.url)
+        print(response)
         if response.status_code != 200:
             print(f'Get Price History: {response}')
             return None
         try:
             status = response.json()['success']
         except TypeError:
+            print('Ошибка TypeError')
             return None
 
         price_history = self.__convert_history(response.json()['prices'])
         return price_history
 
     def get_item_listigs_only_first_10(self, market_hash_name):
+
         url = 'https://steamcommunity.com/market/listings/730/' + Utils.convert_name(market_hash_name)
         response = self.steamclient._session.get(url, headers=self.headers)
         if response.status_code != 200:
@@ -128,6 +141,7 @@ class SteamMarketMethods:
         info = soup.findAll('script', type="text/javascript")[-1]
         result_sting = info.text.split('g_rgListingInfo =')[1].split(';')[0]
         listings = json.loads(result_sting)
+
         return listings
 
     async def create_async_session(self):

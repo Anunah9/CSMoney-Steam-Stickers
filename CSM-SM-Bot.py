@@ -8,8 +8,8 @@ import utils.Utils
 from utils import Utils
 
 
-def get_items_from_csm(offset):
-    return csmAcc.get_items(min_price=1, max_price=30, offset=offset, has_rare_sticker=False)
+def get_items_from_csm(offset, min_price):
+    return csmAcc.get_items(min_price=min_price, max_price=30, offset=offset, has_rare_sticker=False)
 
 
 def create_url(item_name, price, has_trade_lock: bool):
@@ -49,11 +49,17 @@ def to_db(item_name, price_sm, price_avg, count):
 
 def main(start, stop):
     for offset in range(start, stop):
-        items = get_items_from_csm(offset*60)
+        items = get_items_from_csm(offset*60, min_price=min_price/currensy.rates['USD'].value)
         for item in items:
             print('------------------------------------------------------')
             item_name = item['fullName']
+            print(item_name)
             price_csm = currensy.change_currency(item['price'])
+            print(price_csm)
+
+            if price_csm < min_price:
+                print('continue')
+                continue
             item_sm = get_from_db(item_name)
             if item_sm:
                 _, price_sm, price_avg_sm, count = item_sm
@@ -70,6 +76,7 @@ def main(start, stop):
                 try:
                     price_no_fee = price_listings_sm[list(price_listings_sm.keys())[0]]['converted_price']
                     fee = price_listings_sm[list(price_listings_sm.keys())[0]]['converted_fee']
+                    print(price_listings_sm)
                 except AttributeError:
                     print('Ошибка')
                     price_no_fee = 0
@@ -86,6 +93,7 @@ def main(start, stop):
             url = f'https://steamcommunity.com/market/listings/730/{market_hash_mame}'
             csm_url = create_url(item_name, item['price'], has_trade_lock=False)
             profit, profit_avg = get_profit(price_csm, price_sm*0.87, price_avg_sm*0.87)
+
             if profit > min_profit and profit_avg > min_profit:
                 print(item_name)
                 print(url)
@@ -107,6 +115,22 @@ def main(start, stop):
                     f'💲 Средний профит: {profit_avg}%'
                 )
                 bot.send_message(368333609, message)  # Я
+        time.sleep(1)
+
+
+def parse_cookie_string(cookie_string):
+    cookie_dict = {}
+    if cookie_string:
+        cookie_parts = cookie_string.split('; ')
+        for part in cookie_parts:
+            key, value = part.split('=', 1)
+            cookie_dict[key] = value
+    return cookie_dict
+
+# Пример использования:
+cookie_string = "user_id=123; session_token=abc123; preferences=dark_mode"
+cookie_dict = parse_cookie_string(cookie_string)
+print(cookie_dict)
 
 
 if __name__ == '__main__':
@@ -115,11 +139,12 @@ if __name__ == '__main__':
     csdb = sqlite3.connect('./db/CS.db')
     cur = csdb.cursor()
     cur.execute('DELETE FROM tempSteamPrices')
-    steamAcc = Steam.SteamMarketMethods()
+    steamAcc = Steam.SteamMarketMethods('sanek0904', 'Bazaranet101', 'Sanek0904.txt')
     csmAcc = CSMoney.CSMMarketMethods(None)
     currensy = utils.Utils.Currensy()
-    min_profit = -14
-    min_limit_count = 20
+    min_profit = -40
+    min_limit_count = 30
+    min_price = 2500
     t1 = time.time()
     main(0, 50)
     print('Время выполнения: ', time.time() - t1)

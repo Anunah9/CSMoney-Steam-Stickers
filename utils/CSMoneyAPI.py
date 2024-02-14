@@ -17,7 +17,7 @@ import utils.Utils
 
 class CSMMarketMethods:
     cookies = None
-    currency = utils.Utils.Currensy()
+    currency = utils.Utils.Currensy('RUB')
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) '
                       'Chrome/114.0.0.0 YaBrowser/23.7.2.767 Yowser/2.5 Safari/537.36'
@@ -26,8 +26,7 @@ class CSMMarketMethods:
     def __init__(self, _cookies):
         self.cookies = _cookies
 
-    @staticmethod
-    def get_items(min_price=0, max_price=1000, offset=0, has_rare_sticker=True, hasTradeLock=False):
+    def get_items(self, min_price=0, max_price=1000, offset=0, has_rare_sticker=True, hasTradeLock=False):
         url = 'https://inventories.cs.money/5.0/load_bots_inventory/730'
         params = {
             'hasRareStickers': has_rare_sticker,
@@ -40,7 +39,8 @@ class CSMMarketMethods:
             'sort': 'price',
             'withStack': 'true'
         }
-        response = requests.get(url, params)
+        response = requests.get(url, params, headers=self.headers)
+        print(response.url)
         if response.status_code != 200:
             print('Get items:', response)
         return response.json()['items']
