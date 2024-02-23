@@ -46,22 +46,26 @@ def close_bot(pid):
 
 
 class Currensy:
-    """USD, UAN, RUB"""
-    today = date.today()
-    rates = ExchangeRates(str(today), locale_en=True)
-    start_currency = None
-    target_currency = None
+    currencys = {
+        'cny': None,
+        'usd': None,
+        'rub': None
+    }
 
-    def __init__(self, target_currency):
-        self.target_currency = target_currency
-        self.currency = self.get_steam_currency(target_currency)
+    def __init__(self):
+        self.currencys['CNY'] = self.get_steam_currency('CNY')
+        self.currencys['USD'] = self.get_steam_currency('USD')
+        self.currencys['RUB'] = self.get_steam_currency('RUB')
 
-    def change_currency(self, price):
-        return price * self.currency
+    def change_currency(self, start_currency, target_currency, price):
+        st_currency = self.currencys[start_currency]
+        tar_currency = self.currencys[target_currency]
+        currency = tar_currency/st_currency
+        return price * currency
 
     def get_steam_currency(self, target_currency):
         url = f'https://api.steampowered.com/ISteamEconomy/GetAssetPrices/v1/?format=json&amp&appid=1764030&amp&key=97F914FB6333AC5416AF882DA9909A35'
         response = requests.get(url).json()
         currency = response['result']["assets"][0]['prices'][target_currency]/100
-        print(currency)
+
         return currency

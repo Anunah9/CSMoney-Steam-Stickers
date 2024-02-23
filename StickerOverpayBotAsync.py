@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import random
 import sqlite3
 import subprocess
 import sys
@@ -36,11 +37,6 @@ def get_items_from_db():
     cur = params.cs_db.cursor()
     query = 'SELECT * FROM items_for_track'
     return cur.execute(query).fetchall()
-
-
-def get_price_sm(itemnameid_):
-    buy_price, _, _, _ = params.steamAccMain.get_steam_prices(itemnameid_)
-    return buy_price
 
 
 def get_item_float_and_stickers(inspect_link):
@@ -87,28 +83,6 @@ def get_item_float_and_stickers(inspect_link):
     return float_item, stickers_result
 
 
-def add_sticker_price_to_db(sticker_name, price):
-    pass
-
-
-def get_desired_stickers_from_item(item, sticker_name):
-    stickers = item['stickers']
-    sticker_name = sticker_name['name']
-    desired_stickers = []
-    for sticker in stickers:
-        if not sticker:
-            continue
-        if sticker['name'] == sticker_name:
-            desired_stickers.append(sticker)
-    return desired_stickers
-
-
-def min_max_overpay(sticker):
-    min_overpay = min(sticker['overpays'], key=lambda x: x['overpay'])['overpay']
-    max_overpay = max(sticker['overpays'], key=lambda x: x['overpay'])['overpay']
-    return min_overpay, max_overpay
-
-
 def get_sticker_price(sticker_names):
     handled_stickers = []
     for sticker in sticker_names:
@@ -126,14 +100,14 @@ def get_sticker_prices(sticker):
 
 def add_to_checked(item_name, item_id):
     cur = params.cs_db.cursor()
-    query = f'INSERT INTO checked (item_id, item_name) VALUES ({item_id}, "{item_name}")'
+    query = f'INSERT INTO checkedSteam (item_id, item_name) VALUES ({item_id}, "{item_name}")'
     cur.execute(query)
     params.cs_db.commit()
 
 
 def check_handled_items(item_id):
     cur = params.cs_db.cursor()
-    query = f'SELECT * FROM checked WHERE item_id = {item_id}'
+    query = f'SELECT * FROM checkedSteam WHERE item_id = {item_id}'
     check = cur.execute(query).fetchone()
     return bool(check)
 
@@ -166,10 +140,13 @@ class Item:
     stickers = None
     listing_id = None
     price_no_fee = None
+    float_item = None
     fee = None
 
 
 def item_handler(item_obj: Item, counter):
+    print(item_obj.stickers)
+    print(len(item_obj.stickers))
     stickers = get_sticker_price(item_obj.stickers)
     sum_prices_stickers = sum(list(map(lambda x: x['price'], stickers)))
     strick_stickers = find_strics(stickers)
@@ -202,7 +179,7 @@ def item_handler(item_obj: Item, counter):
                    f"   • {strick_sticker_name} - 💲 Цена: {strick_price} Руб\n" \
                    f"      Количество - {strick_count} \n"
     print(message)
-    if sum_prices_stickers > item_obj.price_sm * mult_for_common_item:
+    if sum_prices_stickers > item_obj.price_sm * mult_for_common_item or 0.07 <= item_obj.float_item <= 0.08:
         if autobuy:
             buy_item(item_obj.item_name, item_obj.listing_id, item_obj.price_no_fee + item_obj.fee, item_obj.fee)
         params.bot.send_message(368333609, message)  # Я
@@ -211,7 +188,7 @@ def item_handler(item_obj: Item, counter):
             if autobuy:
                 buy_item(item_obj.item_name, item_obj.listing_id, item_obj.price_no_fee + item_obj.fee, item_obj.fee)
             params.bot.send_message(368333609, message)  # Я
-    elif strick_count == 4:
+    elif strick_count >= 4:
         if sum_price_strick > item_obj.price_sm * mult_for_strick_4 and sum_prices_stickers > min_limit_strick_price:
             if autobuy:
                 buy_item(item_obj.item_name, item_obj.listing_id, item_obj.price_no_fee + item_obj.fee, item_obj.fee)
@@ -250,12 +227,14 @@ def items_iterator(item_name, item_link, listings):
             # link = {'link': inspect_link}
             try:
                 float_item, stickers = get_item_float_and_stickers(inspect_link)
+
             except KeyError as exc2:
                 float_item, stickers = 2, []
                 print(f'Get Float Failed: {exc2}')
             if not stickers:
                 continue
             item_obj.stickers = stickers
+            item_obj.float_item = float_item
 
             print(stickers)
             if test_params:
@@ -313,7 +292,7 @@ class Params:
     steamAccServer = None
     csm_acc = utils.CSMoneyAPI.CSMMarketMethods(None)
     reset_router = resetRouter.ResetRouter()
-    currency = Utils.Currensy('RUB')
+    currency = Utils.Currensy()
     get_float_error_counter = 0
     stickers_prices = cs_db.cursor().execute('SELECT * FROM CSMoneyStickerPrices').fetchall()
     first_start = True
@@ -326,7 +305,7 @@ class Params:
     def convert_stickers_to_dict(self):
         sticker_prices_dict = {}
         for sticker in self.stickers_prices:
-            sticker_prices_dict[sticker[0]] = self.currency.change_currency(sticker[1])
+            sticker_prices_dict[sticker[0]] = self.currency.change_currency('USD', 'RUB', sticker[1])
         self.stickers_prices = sticker_prices_dict
 
     def determination_of_initial_parameters(self):
@@ -385,6 +364,10 @@ async def create_async_session(steamclient):
     return async_session
 
 
+def get_proxies_from_db():
+    return list(map(lambda x: x[0], params.cs_db.cursor().execute('SELECT ip FROM workingProxies').fetchall()))
+
+
 async def get_listings_from_response(response_text):
     soup = bs4.BeautifulSoup(response_text, 'lxml')
     info = soup.findAll('script', type="text/javascript")[-1]
@@ -393,7 +376,7 @@ async def get_listings_from_response(response_text):
     return listings
 
 
-async def fetch_data(session, item, counter, count_items):
+async def fetch_data(session, item, counter, proxies):
     item_name = item[0]
     url = item[1]
     delay = 0.85 * counter
@@ -405,7 +388,15 @@ async def fetch_data(session, item, counter, count_items):
                                         'Safari/537.36'
         session.headers['Referer'] = params.steamAccMain.headers['Referer']
         t1 = time.time()
-        response = await session.get(url)
+        proxy = proxies[random.randint(0, len(proxies))]
+        try:
+            response = await session.get(url)
+        except Exception as exc:
+            params.cs_db.cursor().execute(f'DELETE FROM workingProxies WHERE ip = "{proxy}"')
+        print(f'Использую прокси: {proxy}')
+        if response.status != 200:
+            print(response.status)
+            params.cs_db.cursor().execute(f'DELETE FROM workingProxies WHERE ip = "{proxy}"')
         # async with session.get(url) as response:
         print('Время одного запроса: ', time.time()-t1)
         params.counter_requests += 1
@@ -456,12 +447,12 @@ async def main():
     start = 0
     while True:
         items = get_items_from_db()
+        proxies = get_proxies_from_db()
         print('Количество предметов: ', len(items))
         for item in items:
             print(item[0])
         try:
             print('---------------------------------------')
-
             tasks1 = []
             counter = 0
             iter_time = round(60/len(items))
@@ -469,7 +460,7 @@ async def main():
 
             for i in range(iter_time):
                 for item in items:
-                    tasks1.append(fetch_data(session, item, counter, len(items)))
+                    tasks1.append(fetch_data(session, item, counter, proxies))
                     counter += 1
             t2 = time.time()
             await asyncio.gather(*tasks1)
@@ -522,7 +513,7 @@ if __name__ == '__main__':
     params.determination_of_initial_parameters()
     params.convert_stickers_to_dict()
     # print(params.stickers_prices)
-    config = read_config('./config.txt')
+    config = read_config('configSteam.txt')
 
     mult_for_strick_3 = float(config.get('MULT_FOR_STRICK_3'))
     mult_for_strick_4 = float(config.get('MULT_FOR_STRICK_4'))

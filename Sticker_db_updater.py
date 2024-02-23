@@ -10,6 +10,7 @@ from bs4 import BeautifulSoup
 
 
 def add_to_db(sticker_name, price, cur):
+    sticker_name = sticker_name.replace('&#39', "'")
     query = f'INSERT INTO CSMoneyStickerPrices VALUES ("{sticker_name}", {price})'
     cur.execute(query)
 
@@ -37,13 +38,17 @@ def get_all_sticker_prices_v2(cur):
 
     for sticker in stickers:
         item = items[sticker]
-        print(sticker)
+        # print(sticker)
         # pprint.pprint(item)
-        try:
-            median_price = item['price']['7_days']['median']
-        except:
-            median_price = item['price']['all_time']['median']
+        if 'price' in item:
+            try:
+                median_price = item['price']['7_days']['median']
+            except:
+                median_price = item['price']['all_time']['median']
+        else:
+            median_price = 0
         add_to_db(sticker, median_price, cur)
+
 
 def main():
     db = sqlite3.connect('db/CS.db')

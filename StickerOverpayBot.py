@@ -435,7 +435,7 @@ if __name__ == '__main__':
     params.determination_of_initial_parameters()
     params.convert_stickers_to_dict()
     # print(params.stickers_prices)
-    config = read_config('./config.txt')
+    config = read_config('configSteam.txt')
 
     mult_for_strick_3 = float(config.get('MULT_FOR_STRICK_3'))
     mult_for_strick_4 = float(config.get('MULT_FOR_STRICK_4'))
