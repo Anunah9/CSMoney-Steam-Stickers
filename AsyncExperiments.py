@@ -136,7 +136,6 @@ async def main():
     #         listings = await get_listings_from_response(result)
 
 
-
 if __name__ == '__main__':
     steamAccAnn = SteamMarketAPI.SteamMarketMethods('Sanek0904', 'Bazaranet101', './Sanek0904.txt')
     steamAccServer = SteamMarketAPI.SteamMarketMethods('abinunas1976', 'PQIUZmqgCW1992', './abinunas1976.txt.txt')

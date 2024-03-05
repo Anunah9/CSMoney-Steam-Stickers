@@ -15,7 +15,7 @@ from steampy import models
 
 import Sticker_db_updater
 
-from utils import Utils, resetRouter
+from utils import Utils, resetRouter, BuffAPI
 
 if sys.platform:
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
@@ -88,6 +88,7 @@ class Item:
     listing_id = None
     sticker_tags = None
     sticker_premium = None
+    sell_id = None
 
     def print_item_info(self):
         print(f"Назввние: {self.item_name} \nЦена бафф: {self.price_buff}\n"
@@ -161,6 +162,8 @@ def item_handler(item_obj: Item, counter):
     strick_count = 0
     strick_price = 0
     sum_price_strick = 0
+    if item_obj.sticker_premium and item_obj.sticker_premium > 5:
+        return
     print(f'striiiiiiiiiiic: {bool(strick_stickers)}')
     if strick_stickers:
         strick_sticker_name = list(strick_stickers.keys())[0]
@@ -171,6 +174,7 @@ def item_handler(item_obj: Item, counter):
     print('---------------------------------------------------', strick_sticker_name)
     print(strick_stickers)
     url = create_url(item_obj)
+
     message = f"{int(len(item_obj.item_name)/2)*'*'}**BUFF163**{int(len(item_obj.item_name)/2)*'*'} \n" \
               f"🌟 **{item_obj.item_name}** 🌟\n" \
               f"Предмет #{counter}\n" \
@@ -195,36 +199,42 @@ def item_handler(item_obj: Item, counter):
                    f"      Количество - {strick_count} \n"
     print(message)
     if sum_prices_stickers > item_obj.price_buff * mult_for_common_item:
-        if autobuy:
-            # buy_item(item_obj.item_name, item_obj.listing_id, item_obj.price_no_fee + item_obj.fee, item_obj.fee)
-            print('Автобая пока нет')
         params.bot.send_message(368333609, message)  # Я
+        if autobuy:
+            params.buffAcc.buy_item(f'https://buff.163.com/goods/{item_obj.goods_id}', item_obj.sell_id)
     if strick_count == 3 and strick_count >= min_stickers_in_strick:
         if sum_price_strick > item_obj.price_buff * mult_for_strick_3 and sum_prices_stickers > min_limit_strick_price:
-            if autobuy:
-                print('Автобая пока нет')
-                # buy_item()
             params.bot.send_message(368333609, message)  # Я
+            if autobuy:
+                params.buffAcc.buy_item(f'https://buff.163.com/goods/{item_obj.goods_id}', item_obj.sell_id)
     elif strick_count >= 4:
         if sum_price_strick > item_obj.price_buff * mult_for_strick_4 and sum_prices_stickers > min_limit_strick_price:
-            if autobuy:
-                print('Автобая пока нет')
-            # buy_item(item_obj.item_name, item_obj.listing_id, item_obj.price_no_fee + item_obj.fee, item_obj.fee)
-
             params.bot.send_message(368333609, message)  # Я
+            if autobuy:
+                params.buffAcc.buy_item(f'https://buff.163.com/goods/{item_obj.goods_id}', item_obj.sell_id)
+
+
 
 
 def items_iterator(item, listings):
     item_obj = Item()
     item_obj.item_name = item[0]
     item_obj.goods_id = item[2]
+
     counter = 0
 
     try:
         for listing in listings:
             counter += 1
+            item_id = listing['asset_info']['id']
 
-            if check_handled_items(listing['asset_info']['id']):
+            # print(item[0], item_id)
+            listing_splited = listing['id'].split('-')
+            sell_id = listing_splited[0]+'-'+listing_splited[1]
+            item_obj.sell_id = sell_id
+            # print(sell_id)
+            # pprint.pprint(listing)
+            if check_handled_items(item_id):
                 continue
             print(f'listing №{counter}')
             add_to_checked(item_obj.item_name, listing['asset_info']['id'])
@@ -265,6 +275,7 @@ class Params:
     t_before_429 = None
     steamAccMain = None
     steamAccServer = None
+    buffAcc = BuffAPI.BuffBuyMethods()
     reset_router = resetRouter.ResetRouter()
     currency = Utils.Currensy()
     get_float_error_counter = 0

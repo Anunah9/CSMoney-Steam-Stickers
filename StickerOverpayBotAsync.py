@@ -364,10 +364,6 @@ async def create_async_session(steamclient):
     return async_session
 
 
-def get_proxies_from_db():
-    return list(map(lambda x: x[0], params.cs_db.cursor().execute('SELECT ip FROM workingProxies').fetchall()))
-
-
 async def get_listings_from_response(response_text):
     soup = bs4.BeautifulSoup(response_text, 'lxml')
     info = soup.findAll('script', type="text/javascript")[-1]
@@ -376,7 +372,7 @@ async def get_listings_from_response(response_text):
     return listings
 
 
-async def fetch_data(session, item, counter, proxies):
+async def fetch_data(session, item, counter):
     item_name = item[0]
     url = item[1]
     delay = 0.85 * counter
@@ -388,15 +384,8 @@ async def fetch_data(session, item, counter, proxies):
                                         'Safari/537.36'
         session.headers['Referer'] = params.steamAccMain.headers['Referer']
         t1 = time.time()
-        proxy = proxies[random.randint(0, len(proxies))]
-        try:
-            response = await session.get(url)
-        except Exception as exc:
-            params.cs_db.cursor().execute(f'DELETE FROM workingProxies WHERE ip = "{proxy}"')
-        print(f'Использую прокси: {proxy}')
-        if response.status != 200:
-            print(response.status)
-            params.cs_db.cursor().execute(f'DELETE FROM workingProxies WHERE ip = "{proxy}"')
+
+        response = await session.get(url)
         # async with session.get(url) as response:
         print('Время одного запроса: ', time.time()-t1)
         params.counter_requests += 1
@@ -447,7 +436,6 @@ async def main():
     start = 0
     while True:
         items = get_items_from_db()
-        proxies = get_proxies_from_db()
         print('Количество предметов: ', len(items))
         for item in items:
             print(item[0])
@@ -460,7 +448,7 @@ async def main():
 
             for i in range(iter_time):
                 for item in items:
-                    tasks1.append(fetch_data(session, item, counter, proxies))
+                    tasks1.append(fetch_data(session, item, counter))
                     counter += 1
             t2 = time.time()
             await asyncio.gather(*tasks1)
